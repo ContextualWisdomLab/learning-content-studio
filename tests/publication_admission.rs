@@ -1,8 +1,8 @@
 //! Regression and edge-case contract tests for deterministic publication admission.
 
 use learning_content_studio::{
-    AdmissionError, BlockingFeature, PublicationOutcome, PublicationRequest, PublisherTarget,
-    evaluate_publication,
+    AdmissionError, BlockingFeature, PublicationMetadata, PublicationOutcome, PublicationRequest,
+    PublisherTarget, evaluate_publication,
 };
 
 fn request(target: PublisherTarget, contract_id: &str) -> PublicationRequest {
@@ -16,6 +16,17 @@ fn request(target: PublisherTarget, contract_id: &str) -> PublicationRequest {
         locale_code: "en-US".into(),
         approved: true,
         blocking_features: Vec::new(),
+    }
+}
+
+fn metadata() -> PublicationMetadata {
+    PublicationMetadata {
+        content_release_id: "content_release_01".into(),
+        source_hash: format!("sha256:{}", "a".repeat(64)),
+        publisher_contract_id: "native_cwl_xapi_2_0/v1".into(),
+        publisher_version: "1.0.0".into(),
+        standard_revision: "2026-08".into(),
+        locale_code: "en-US".into(),
     }
 }
 
@@ -42,11 +53,24 @@ fn rejects_cross_target_contract_selection() {
 
 #[test]
 fn rejects_non_sha256_source_identity() {
-    let mut input = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
-    input.source_hash = "sha256:not-a-digest".into();
-
+    let mut missing_prefix = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
+    missing_prefix.source_hash = "a".repeat(64);
     assert_eq!(
-        evaluate_publication(input),
+        evaluate_publication(missing_prefix),
+        Err(AdmissionError::InvalidSourceHash)
+    );
+
+    let mut wrong_length = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
+    wrong_length.source_hash = "sha256:not-a-digest".into();
+    assert_eq!(
+        evaluate_publication(wrong_length),
+        Err(AdmissionError::InvalidSourceHash)
+    );
+
+    let mut non_hex = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
+    non_hex.source_hash = format!("sha256:{}g", "a".repeat(63));
+    assert_eq!(
+        evaluate_publication(non_hex),
         Err(AdmissionError::InvalidSourceHash)
     );
 }
@@ -83,6 +107,34 @@ fn incompatibility_is_order_independent_and_machine_readable() {
             .canonical_json()
             .contains("\"publication_status\":\"incompatible\"")
     );
+}
+
+#[test]
+fn canonical_json_sorts_directly_constructed_incompatibility() {
+    let later = BlockingFeature::new(
+        "video_caption_missing",
+        "component_b",
+        "accessibility_evidence_missing",
+    );
+    let earlier = BlockingFeature::new(
+        "audio_rights_missing",
+        "component_a",
+        "rights_evidence_missing",
+    );
+    let outcome = PublicationOutcome::Incompatible {
+        metadata: metadata(),
+        blocking_features: vec![later, earlier],
+    };
+
+    let json = outcome.canonical_json();
+    let earlier_index = json
+        .find("audio_rights_missing")
+        .expect("earlier canonical blocker");
+    let later_index = json
+        .find("video_caption_missing")
+        .expect("later canonical blocker");
+
+    assert!(earlier_index < later_index);
 }
 
 #[test]
@@ -125,12 +177,80 @@ fn compatible_admission_preserves_exact_release_authority() {
 }
 
 #[test]
-fn rejects_empty_required_identity_fields() {
+fn canonical_json_escapes_all_json_control_classes() {
     let mut input = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
-    input.locale_code = " ".into();
+    input.content_release_id = "q\"\\\n\r\t\u{08}\u{0c}\u{01}é".into();
 
+    let outcome = evaluate_publication(input).expect("valid escaped identity");
+    assert!(outcome.canonical_json().contains(
+        "\"content_release_id\":\"q\\\"\\\\\\n\\r\\t\\b\\f\\u0001é\""
+    ));
+}
+
+#[test]
+fn rejects_every_empty_required_identity_field() {
+    let mut content_release = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
+    content_release.content_release_id = " ".into();
     assert_eq!(
-        evaluate_publication(input),
+        evaluate_publication(content_release),
+        Err(AdmissionError::EmptyRequiredField("content_release_id"))
+    );
+
+    let mut contract = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
+    contract.publisher_contract_id = " ".into();
+    assert_eq!(
+        evaluate_publication(contract),
+        Err(AdmissionError::EmptyRequiredField("publisher_contract_id"))
+    );
+
+    let mut version = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
+    version.publisher_version = " ".into();
+    assert_eq!(
+        evaluate_publication(version),
+        Err(AdmissionError::EmptyRequiredField("publisher_version"))
+    );
+
+    let mut revision = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
+    revision.standard_revision = " ".into();
+    assert_eq!(
+        evaluate_publication(revision),
+        Err(AdmissionError::EmptyRequiredField("standard_revision"))
+    );
+
+    let mut locale = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
+    locale.locale_code = " ".into();
+    assert_eq!(
+        evaluate_publication(locale),
         Err(AdmissionError::EmptyRequiredField("locale_code"))
+    );
+}
+
+#[test]
+fn rejects_every_empty_blocking_feature_identity_field() {
+    let mut feature_code = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
+    feature_code.blocking_features = vec![BlockingFeature::new(" ", "component_1", "reason_1")];
+    assert_eq!(
+        evaluate_publication(feature_code),
+        Err(AdmissionError::EmptyRequiredField(
+            "blocking_feature.feature_code"
+        ))
+    );
+
+    let mut source_reference = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
+    source_reference.blocking_features = vec![BlockingFeature::new("feature_1", " ", "reason_1")];
+    assert_eq!(
+        evaluate_publication(source_reference),
+        Err(AdmissionError::EmptyRequiredField(
+            "blocking_feature.source_component_reference"
+        ))
+    );
+
+    let mut reason_code = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
+    reason_code.blocking_features = vec![BlockingFeature::new("feature_1", "component_1", " ")];
+    assert_eq!(
+        evaluate_publication(reason_code),
+        Err(AdmissionError::EmptyRequiredField(
+            "blocking_feature.reason_code"
+        ))
     );
 }
