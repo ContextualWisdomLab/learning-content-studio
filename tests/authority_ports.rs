@@ -1,9 +1,9 @@
 //! Trust-boundary regressions for publication admission authority.
 
 use learning_content_studio::{
-    AdmissionError, BlockingFeature, PublicationRequest, PublicationStatus, PublisherTarget,
-    ReleaseAuthorityEvidence, ReleaseAuthorityPort, TargetCompatibilityEvidence,
-    TargetCompatibilityPort, evaluate_publication,
+    AdmissionError, BlockingFeature, CompatibilityReleaseIdentity, PublicationRequest,
+    PublicationStatus, PublisherTarget, ReleaseAuthorityEvidence, ReleaseAuthorityPort,
+    TargetCompatibilityEvidence, TargetCompatibilityPort, evaluate_publication,
 };
 
 #[derive(Clone)]
@@ -32,6 +32,10 @@ impl TargetCompatibilityPort for FixedCompatibilityAuthority {
     }
 }
 
+fn source_hash() -> String {
+    format!("sha256:{}", "a".repeat(64))
+}
+
 fn request(target: PublisherTarget) -> PublicationRequest {
     PublicationRequest::new("content_release_01", target)
 }
@@ -39,7 +43,7 @@ fn request(target: PublisherTarget) -> PublicationRequest {
 fn approved_release() -> ReleaseAuthorityEvidence {
     ReleaseAuthorityEvidence::new(
         "content_release_01",
-        &format!("sha256:{}", "a".repeat(64)),
+        &source_hash(),
         "en-US",
         true,
         "release_approval_receipt_01",
@@ -55,6 +59,7 @@ fn compatibility(
         PublisherTarget::Cmi5Quartz => "cmi5_quartz_xapi_1_0_3/v1",
     };
     TargetCompatibilityEvidence::new(
+        CompatibilityReleaseIdentity::new("content_release_01", &source_hash()),
         target,
         contract,
         "1.0.0",
@@ -96,7 +101,7 @@ fn authority_owned_unapproved_release_fails_closed() {
     let release_authority = FixedReleaseAuthority {
         evidence: ReleaseAuthorityEvidence::new(
             "content_release_01",
-            &format!("sha256:{}", "a".repeat(64)),
+            &source_hash(),
             "en-US",
             false,
             "release_approval_receipt_01",
@@ -121,7 +126,7 @@ fn release_authority_cannot_swap_release_identity() {
     let release_authority = FixedReleaseAuthority {
         evidence: ReleaseAuthorityEvidence::new(
             "content_release_other",
-            &format!("sha256:{}", "a".repeat(64)),
+            &source_hash(),
             "en-US",
             true,
             "release_approval_receipt_01",
