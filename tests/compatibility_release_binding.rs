@@ -1,9 +1,9 @@
 //! Regressions for exact immutable-release binding of target compatibility evidence.
 
 use learning_content_studio::{
-    AdmissionError, PublicationRequest, PublisherTarget, ReleaseAuthorityEvidence,
-    ReleaseAuthorityPort, TargetCompatibilityEvidence, TargetCompatibilityPort,
-    evaluate_publication,
+    AdmissionError, CompatibilityReleaseIdentity, PublicationRequest, PublisherTarget,
+    ReleaseAuthorityEvidence, ReleaseAuthorityPort, TargetCompatibilityEvidence,
+    TargetCompatibilityPort, evaluate_publication,
 };
 
 #[derive(Clone)]
@@ -44,8 +44,7 @@ fn approved_release() -> ReleaseAuthorityEvidence {
 
 fn target_evidence(content_release_id: &str, source_hash: &str) -> TargetCompatibilityEvidence {
     TargetCompatibilityEvidence::new(
-        content_release_id,
-        source_hash,
+        CompatibilityReleaseIdentity::new(content_release_id, source_hash),
         PublisherTarget::NativeWeb,
         "native_cwl_xapi_2_0/v1",
         "1.0.0",
@@ -55,7 +54,9 @@ fn target_evidence(content_release_id: &str, source_hash: &str) -> TargetCompati
     )
 }
 
-fn evaluate(evidence: TargetCompatibilityEvidence) -> Result<learning_content_studio::PublicationOutcome, AdmissionError> {
+fn evaluate(
+    evidence: TargetCompatibilityEvidence,
+) -> Result<learning_content_studio::PublicationOutcome, AdmissionError> {
     let release_authority = FixedReleaseAuthority {
         evidence: approved_release(),
     };
