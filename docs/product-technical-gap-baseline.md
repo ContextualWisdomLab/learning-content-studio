@@ -11,22 +11,23 @@ This baseline applies to the exact Git commit that contains it. GitHub PR/branch
 Live commercialization evidence:
 
 - repository is public, organization-owned, and `fork=false`;
-- PR #1 is open/Ready/mechanically mergeable at `7b8e0472451ab095301b7a5e40b1f99cd8af584b`; exact-head repository Quality and SAST succeeded;
-- PR #1 Security Scan failed only in Dependency Review after exact checkout; OSV/Trivy/Scorecard succeeded and the authoritative dependency-graph compare returned HTTP 403. `ContextualWisdomLab/.github#810` remains the canonical fail-closed configuration/availability incident;
-- the organization ruleset requires one approval and resolved threads on the protected default branch; no self-approval, admin bypass, or protection weakening is accepted;
-- PR #6 was non-destructively restacked on the current parent. A subsequent exact-head Devin review found two real gaps: caller-controlled approval/blocker assertions could mint an opaque but falsely trusted compatible outcome, and aggregate coverage could let test-only code mask uncovered production paths;
-- authority-port regression tests were committed first at `77d6d9b27d42f16d379fc427ff61e36e7b443f85` before production repair;
-- the production repair removes approval/source/locale/contract/version/standard/blockers from `PublicationRequest`, introduces `ReleaseAuthorityPort` and `TargetCompatibilityPort`, cross-binds their evidence to caller release/target intent, and records stable release-approval/target-validation evidence identities;
-- the coverage repair evaluates LLVM per-file summaries for repository `src/` production files and requires every production line/branch to be covered, with a nonzero production branch denominator;
-- downstream PR #7 must be restacked again after this parent repair and revalidated on its own exact head.
+- PR #1 is open/Ready/mechanically mergeable at `e7977e5736b425e6221481934b25811ab27d7557`; exact-head Security Scan `33569943004`, SAST Semgrep `33569943093`, and Learning Content Studio Quality `33569943228` are queued and therefore not passing evidence yet;
+- the organization ruleset requires ordinary protected-branch governance, including independent approval; no self-approval, admin bypass, or protection weakening is accepted;
+- PR #6 is the first executable Publication Admission kernel and remains stacked on PR #1. Earlier review gaps around caller-controlled approval/blockers and aggregate-only coverage were repaired with authority ports and per-production-file coverage enforcement;
+- the latest live review exposed a separate trust defect: `TargetCompatibilityEvidence` was target-bound but not release-bound, so cached compatibility evidence for another immutable release could be replayed;
+- release-binding regression commit `c8346a5fb1652c02a515b826f856a83e2072ae63` preceded production repair and required mismatched release identity and mismatched source hash to fail closed;
+- production commit `f00ebc1523a682d35307ea4b14593378d1b8d190` adds `CompatibilityReleaseIdentity`, binds target evidence to exact `content_release_id` plus `source_hash`, and returns typed `CompatibilityReleaseMismatch` / `CompatibilitySourceMismatch` failures;
+- all affected existing test fixtures were adapted without removing prior edge cases; exact-head repository and central checks must be re-established after the documentation commits that contain this baseline;
+- downstream PR #7 must be revalidated against the release-bound admission API rather than assuming predecessor-head compatibility.
 
 ## Feature specification and ubiquitous language
 
 - **publication request**: caller intent containing only release identity and publisher target;
 - **release authority evidence**: immutable release identity, source SHA-256, locale, approval state, and stable approval-evidence identity supplied by `ReleaseAuthorityPort`;
-- **target compatibility evidence**: target, contract/version/standard, validation-evidence identity, and blockers supplied by `TargetCompatibilityPort`;
+- **compatibility release identity**: exact immutable `content_release_id` and source SHA-256 that the target validator actually evaluated;
+- **target compatibility evidence**: release-bound target, contract/version/standard, validation-evidence identity, and blockers supplied by `TargetCompatibilityPort`;
 - **blocking feature**: authority-owned evidence that target transformation would lose semantics;
-- **publication admission**: deterministic cross-binding and validation of caller intent against both authority ports;
+- **publication admission**: deterministic cross-binding and validation of caller intent against release authority and release-bound target validation;
 - **publication outcome**: opaque compatible/incompatible result that preserves authority traceability;
 - **native-web publication receipt**: downstream byte-bound evidence after exact release/artifact/manifest hashing.
 
@@ -37,36 +38,39 @@ Admission invariants:
 - authoritative approval must be true;
 - source hash, locale, and approval-evidence identity are required; SHA-256 syntax is validated;
 - target evidence must exist and match the requested target;
+- target evidence must identify the same `content_release_id` and exact `source_hash` as release-authority evidence; cached evidence for another release or source identity fails closed;
 - target-owned contract/version/standard/validation-evidence identities are required;
 - target contract must match the target-specific required contract;
 - blockers are validated, sorted by `feature_code`/`source_component_reference`/`reason_code`, and exact duplicates are rejected;
 - compatible outcome requires zero authority-supplied blockers; incompatible outcome requires at least one;
 - `PublicationOutcome` and `PublicationMetadata` remain externally read-only;
-- exact byte equality is intentionally downstream: native finalization recomputes release/artifact/manifest SHA-256 from bytes.
+- admission source-hash validation is identity/syntax plus authority cross-binding; exact byte equality is intentionally downstream, where native finalization recomputes release/artifact/manifest SHA-256 from bytes.
 
 ## DDD context map
 
 - **Core — Content Authoring & Release:** mutable projects/revisions/review/approval and immutable release authority.
-- **Supporting — Publication Admission & Projection:** authority-backed compatibility decision, target transformation boundary, and byte provenance.
+- **Supporting — Publication Admission & Projection:** authority-backed compatibility decision, exact release-to-validation binding, target transformation boundary, and byte provenance.
 - **Supporting — Rights & Accessibility Evidence:** release and target gating evidence.
 - **Generic — Artifact Storage / Delivery:** object storage/CDN/registry/telemetry/deployment behind ACLs.
 
-`ReleaseAuthorityPort` and `TargetCompatibilityPort` are ACLs between owning bounded contexts and Publication Admission. Production implementations must not reconstruct authority from mutable request fields or synthetic/demo data.
+`ReleaseAuthorityPort` and `TargetCompatibilityPort` are ACLs between owning bounded contexts and Publication Admission. `CompatibilityReleaseIdentity` is the value object that prevents target-validation evidence from crossing immutable release boundaries. Production implementations must not reconstruct authority from mutable request fields or synthetic/demo data.
 
 ## Commercialization gaps
 
 | Gap | Owner | Evidence | Action/state | Next verification |
 | --- | --- | --- | --- | --- |
-| Caller assertions could forge trusted compatibility | Learning Content Studio | exact-head Devin review on PR #6 | **Repaired test-first** with authority ports and intent-only request | Exact-head fmt/clippy/tests/production coverage/rustdoc + reviewer confirmation |
-| Aggregate coverage could mask production gaps | Learning Content Studio | exact-head Devin review on PR #6 | **Repaired** with per-`src/` line/branch enforcement | Exact-head coverage job proves every production file 100% |
-| Dependency Review unavailable | ContextualWisdomLab/.github / GitHub configuration | PR #1 dependency compare HTTP 403 | **Fail-closed; #810 canonical** | Authorized configuration repair + unchanged-head HTTP 200 canary |
-| Stacked central review | ContextualWisdomLab/.github | required workflows target protected default branch | No local approval substitute | Central stacked review or protected retarget after parent integration |
-| Native byte finalization not integrated | Learning Content Studio | PR #7 implements exact-byte receipt evidence | In progress downstream | Restack on repaired PR #6, adapt API, rerun exact-head checks/reviews |
-| Shared native xAPI 2.0 contract not released | learning-interoperability-contracts | renderer explicitly dependency-gated | Open upstream | Repair/release true owner before claiming native renderer conformance |
+| Cached target compatibility evidence could authorize another release | Learning Content Studio | live unresolved Devin finding on PR #6 verified against source | **Repaired test-first** by `c8346a5f...` then `f00ebc15...`; exact release/hash binding enforced | Exact-head fmt/clippy/tests/production coverage/rustdoc + reviewer confirmation |
+| Caller assertions could forge trusted compatibility | Learning Content Studio | earlier PR #6 review | **Repaired test-first** with authority ports and intent-only request | Preserve under exact-head regression suite |
+| Aggregate coverage could mask production gaps | Learning Content Studio | earlier PR #6 review | **Repaired** with per-`src/` line/branch enforcement | Exact-head coverage proves every production file 100% |
+| Parent foundation not protected-integrated | Learning Content Studio / governance | PR #1 at `e7977e57...`; exact-head required workflows queued | Open without bypass | Unchanged-head required checks + independent approval + ordinary merge |
+| Dependency Review availability/configuration | ContextualWisdomLab/.github / GitHub configuration | prior dependency compare HTTP 403; canonical `.github#810` | Fail closed | Authorized control-plane repair + exact-head canary |
+| Stacked central review | ContextualWisdomLab/.github | protected-default workflow/review policy | No local approval substitute | Central stacked review or protected retarget after parent integration |
+| Native byte finalization integration | Learning Content Studio | PR #7 owns exact-byte receipt evidence | In progress downstream | Revalidate/adapt PR #7 against release-bound PR #6 API |
+| Shared native xAPI 2.0 contract not released | `ContextualWisdomLab/learning-interoperability-contracts` | renderer explicitly dependency-gated | Open upstream | Release true owner before native renderer conformance claim |
 | No native renderer/package generator | Learning Content Studio | finalizer consumes already-emitted bytes | Open | Deterministic renderer/manifest builder against released shared contract + byte-identical fixtures |
 | No immutable persistence | Learning Content Studio | no schema/migration/repository | Open | 3NF append-only `content_release`/`publication_receipt` authority and audit transactions |
 | No buyer-facing authoring UX | Learning Content Studio | no app/UI/Storybook/Figma evidence | Open | Review -> accessibility/rights -> approval -> release workflow with accessibility/error-recovery evidence |
-| No operability/deployment baseline | Learning Content Studio | no service/container/runtime | Open | Add only when remote persistence/publishing requires it; then compose/observability/recovery/k6 |
+| No operability/deployment baseline | Learning Content Studio | no service/container/runtime | Open | Add when remote persistence/publishing requires it; then compose/observability/recovery/k6 |
 | No public product release | Learning Content Studio | no protected release/tag/package | Open | Protected integration, SBOM/provenance/reproducibility/API maturity |
 
 ## Persistence and security guardrails
@@ -75,14 +79,14 @@ Future authoritative relational objects use two-or-more-word `snake_case` names 
 
 ## Verification matrix
 
-- behavior/security trust change is test-first (`77d6d9b2...` RED before production repair);
+- latest trust repair is test-first: `c8346a5fb1652c02a515b826f856a83e2072ae63` establishes release/source mismatch expectations before production `f00ebc1523a682d35307ea4b14593378d1b8d190`;
 - deterministic/hash-sensitive core logic remains Rust;
 - production consumes no synthetic demo data;
 - public Rust APIs use `missing_docs = "deny"` plus rustdoc warnings-as-errors;
 - CI requires rustfmt, Clippy `-D warnings`, all-target tests, and 100% per-production-file line/branch coverage with nonzero production branch evidence;
 - central exact-head Security/SAST/review evidence remains mandatory and cannot be replaced by repository-local green checks;
-- writer branches are re-fetched before mutation; stack updates use ordinary merge ancestry without force-push/destructive rebase.
+- writer branches are re-fetched before mutation; stack updates use ordinary ancestry without force-push/destructive rebase.
 
 ## Next bounded commercialization slice
 
-After exact-head validation of the authority-port repair, restack/adapt PR #7 to the new admission API. Then fix/release the shared native xAPI 2.0 contract in its true owner before implementing a conformant native renderer. The next repository-local infrastructure slice is append-only release/publication receipt persistence with explicit authority/evidence/audit transaction identities.
+First establish exact-head checks and independent review for the release-binding repair, then adapt/revalidate PR #7 against that API. After the publication trust stack is coherent, repair/release the shared native xAPI 2.0 contract in its true owner before implementing a conformant native renderer. The next repository-local infrastructure slice is append-only release/publication receipt persistence with explicit authority/evidence/audit transaction identities.
