@@ -13,11 +13,11 @@ Evidence established during the active commercialization iteration:
 - repository is public, organization-owned, and `fork=false`;
 - parent PR #1 is open, Ready, mechanically mergeable, and all observed inline review threads are resolved;
 - CodeRabbit and Devin status contexts succeeded on the parent exact head;
-- Semgrep, Trivy, Scorecard, and OSV completed successfully on the parent exact head;
-- parent central Dependency Review failed closed because GitHub returned HTTP 403 for the exact base/head dependency-graph comparison;
-- parent repository quality stayed queued on `ubuntu-latest`; this implementation pins `ubuntu-24.04`, and predecessor implementation head `c913a188078fb392e2d2c4b35c943fb05c6c1b76` completed formatting, Clippy, tests, and rustdoc successfully on an assigned Ubuntu 24.04 runner;
-- Devin review then identified a real canonical-serialization ordering defect and a missing coverage gate. A failing regression was committed first at `b8e377b79e55bebf037b4b285170227ad526d8e9`; production was repaired at `d00f814cf1e84a28b294fa87e84edefcfa481d91`; a checksum-verified 100% line/branch coverage gate was added at `73415daaa7c646be29a7039906423f2662849476`;
-- central required-workflow rules on this repository currently target only `~DEFAULT_BRANCH`, so stacked PR #6 does not receive injected OpenCode/Noema/Security workflows. The central `.github` control plane already documents and implements a separate rotating `org-queue-sweep` OpenCode dispatch path for stacked work; live scheduled control-plane runs are currently backlogged/pending, so no exact-head OpenCode receipt has materialized yet. This is a genuine governance wait and is not converted into local approval.
+- Semgrep completed successfully on the parent exact head; central Security Scan remains failed because Dependency Review received GitHub HTTP 403 for the exact base/head dependency-graph comparison;
+- parent repository quality remains queued on `ubuntu-latest`; this implementation pins `ubuntu-24.04`, and an earlier implementation head completed formatting, Clippy, tests, and rustdoc on an assigned Ubuntu 24.04 runner;
+- Devin review identified a canonical-serialization ordering defect and missing coverage gate. The ordering regression was committed before its production repair and the quality lane now enforces checksum-verified 100% line and branch coverage;
+- a later Devin review found that public `PublicationOutcome` variants and public `PublicationMetadata` fields allowed downstream callers to manufacture apparently trusted compatible/incompatible results without running admission validation. Regression expectations were committed first at `96d97f4dc22fcff30e6a887256711b57f1fa9db1`; production was repaired at `26f530ca9763b92703b80aa2049d04fe9d74e1c9`; the trusted outcome and metadata are now externally read-only and created only by `evaluate_publication`;
+- central required-workflow rules on this repository target only `~DEFAULT_BRANCH`, so stacked PR #6 does not receive injected OpenCode/Noema/Security workflows. The central `.github` control plane documents a rotating `org-queue-sweep` review path for stacked work; no local approval substitute is accepted.
 
 ## Current feature specification
 
@@ -31,7 +31,8 @@ Ubiquitous language:
 - **publisher target**: a delivery family with its own interoperability contract;
 - **publisher contract**: version-specific transformation/validation boundary owned by one target;
 - **blocking feature**: source semantic that cannot be preserved by the selected target;
-- **publication admission**: deterministic decision allowing target transformation or returning incompatibility evidence.
+- **publication admission**: deterministic decision allowing target transformation or returning incompatibility evidence;
+- **trusted publication outcome**: an immutable result that can only be created after the admission invariants succeed.
 
 Aggregate/invariants:
 
@@ -41,10 +42,12 @@ Aggregate/invariants:
 - `native_web_publisher` admits only `native_cwl_xapi_2_0/v1`;
 - `cmi5_quartz_publisher` admits only `cmi5_quartz_xapi_1_0_3/v1`;
 - cross-target contract selection fails closed;
-- blocking features sort by `feature_code`, `source_component_reference`, then `reason_code` both during admission and defensively during canonical serialization;
+- blocking features sort by `feature_code`, `source_component_reference`, then `reason_code` before trusted outcome construction;
 - duplicate blocking-feature triples are invalid at admission;
+- a compatible trusted outcome has zero blockers and an incompatible trusted outcome has at least one blocker;
+- `PublicationOutcome` and `PublicationMetadata` have no external write/constructor surface; validated status, authority metadata and blockers are exposed read-only;
 - compatible and incompatible outcomes bind the same release/contract/version/standard/locale authority;
-- canonical JSON output has stable field and array order even for directly constructed public outcomes.
+- canonical JSON output has stable field and array order from the already validated outcome.
 
 Domain events are not persisted in this first slice. A future persistence boundary may emit `content_release_approved`, `publication_admitted`, and `publication_rejected` events only after durable transaction semantics are defined.
 
@@ -62,17 +65,18 @@ The publisher boundary is an anti-corruption layer: cmi5/xAPI 1.0.3, native xAPI
 | Gap | Owner | Live evidence | Action/state | Next verification |
 | --- | --- | --- | --- | --- |
 | No executable release/publisher boundary | Learning Content Studio | PR #1 explicitly states no executable publisher exists | **In progress:** Rust Publication Admission kernel and tests in PR #6 | Exact-head fmt/clippy/test/rustdoc/coverage plus independent review |
-| Canonical JSON depended on caller blocker order | Learning Content Studio | Devin PR #6 review showed direct public enum construction could bypass admission sorting | **Repaired test-first:** regression `b8e377b...`, production `d00f814...` | Exact-head tests and independent reviewer confirmation |
-| 100% coverage mandate was unenforced | Learning Content Studio | Devin PR #6 review found tests ran without line/branch measurement | **Repaired:** pinned `cargo-llvm-cov` 0.9.0 + exact nightly branch instrumentation; line and branch evidence both fail closed below 100% | Exact-head coverage workflow succeeds with nonzero branch count |
-| Repository quality lane can wait indefinitely on `ubuntu-latest` | Learning Content Studio | PR #1 quality run remained queued while central jobs obtained `ubuntu-24.04` runners | **Repaired in PR #6:** pin repository quality to `ubuntu-24.04`; predecessor exact head executed all original quality steps successfully | Latest exact head obtains a runner and executes expanded coverage lane |
+| Canonical JSON depended on caller blocker order | Learning Content Studio | Devin PR #6 review showed equivalent blocker evidence could serialize differently | **Repaired test-first** | Exact-head tests and independent reviewer confirmation |
+| Trusted admission result could be forged by downstream caller | Learning Content Studio | Devin PR #6 review showed public outcome variants/public metadata fields bypassed approval/hash/contract checks | **Repaired test-first:** regression expectations `96d97f4d...`; production `26f530ca...`; outcomes/metadata are opaque with read-only accessors | Exact-head tests, rustdoc and independent reviewer confirmation |
+| 100% coverage mandate was unenforced | Learning Content Studio | Devin PR #6 review found tests ran without line/branch measurement | **Repaired:** pinned `cargo-llvm-cov` 0.9.0 + exact nightly branch instrumentation; line and branch evidence fail closed below 100% | Exact-head coverage workflow succeeds with nonzero branch count |
+| Repository quality lane can wait indefinitely on `ubuntu-latest` | Learning Content Studio | PR #1 quality run remained queued while central jobs obtained `ubuntu-24.04` runners | **Repaired in PR #6:** pin repository quality to `ubuntu-24.04` | Latest exact head obtains a runner and executes expanded coverage lane |
 | Dependency Review cannot obtain evidence | GitHub repository security configuration / organization control plane | central Security Scan parent exact-head probe returned HTTP 403 | **Blocked, fail-closed:** do not bypass or convert to green skip | Enable/repair dependency-graph capability or token entitlement, then rerun exact-head Security Scan after retargeting to protected default |
-| Stacked OpenCode evidence not yet materialized | ContextualWisdomLab/.github control plane | default-branch ruleset does not inject workflows into stack bases; documented rotating `org-queue-sweep` is the intended fallback, but live scheduled runs are pending in the organization Actions backlog | **Existing causal repair path verified; no unsafe local substitute added** | Central sweep dispatches PR #6 exact head and a current-head OpenCode receipt appears |
+| Stacked OpenCode evidence not yet materialized | ContextualWisdomLab/.github control plane | default-branch ruleset does not inject workflows into stack bases; documented rotating `org-queue-sweep` is the intended fallback | **Existing causal repair path verified; no unsafe local substitute added** | Central sweep dispatches PR #6 exact head and a current-head OpenCode receipt appears |
 | No immutable release persistence | Learning Content Studio | no schema/migration/repository implementation exists | Open | Define 3NF `content_release`, `release_component`, `release_asset`, `release_approval`, `publication_receipt`; item-level UPSERT only for mutable authoring indexes, never immutable releases |
 | No target artifact generator | Learning Content Studio | admission slice deliberately emits no package/artifact | Open | Implement native-web projection first with recomputed source digest and byte-identical fixture proof; then cmi5 Quartz behind its distinct contract |
 | No buyer-facing authoring workflow | Learning Content Studio | no application/UI/Storybook/Figma evidence exists | Open | Implement review→accessibility/rights gate→approval→release flow; verify keyboard/touch/screen-reader/error recovery before GA |
 | No operability/deployment baseline | Learning Content Studio | no service/container/runtime exists | Open | Add service only when publisher/storage workflow requires it; then compose deployment, observability, recovery and k6 evidence |
 | No release/package evidence | Learning Content Studio | no product release/tag/package exists | Open | Publish only after protected integration, SBOM/provenance, reproducible artifacts and public API maturity |
-| CEFR assessment-content vertical | Learning Content Studio + learning-interoperability-contracts | Issues #4/#5 require a released shared contract; upstream PR #5 is currently Draft and stacked | Dependency-gated | Consume released `cwl_cefr_language_assessment/v1`; do not duplicate shared schema or protected descriptor prose |
+| CEFR assessment-content vertical | Learning Content Studio + learning-interoperability-contracts | Issues #4/#5 require a released shared contract | Dependency-gated | Consume released `cwl_cefr_language_assessment/v1`; do not duplicate shared schema or protected descriptor prose |
 
 ## Persistence and data design guardrails
 
@@ -84,7 +88,7 @@ The current kernel processes identifiers and compatibility evidence only; it doe
 
 ## Verification matrix
 
-- behavior changes are test-first: initial admission tests preceded production implementation, and the direct-construction canonical-order regression preceded its repair;
+- behavior changes are test-first: initial admission tests preceded production implementation; canonical-order repair was test-first; trusted-outcome opacity was captured by integration expectations before its production repair;
 - Rust owns the deterministic publication-admission logic;
 - no synthetic demo data is consumed by production;
 - public Rust API documentation is mandatory through `missing_docs = "deny"` and rustdoc warnings-as-errors;
