@@ -16,9 +16,11 @@ Deterministic normalization rules:
 - asset identifiers are derived from the content release identity plus normalized asset path/content identity, not from random or machine-local IDs;
 - `source_hash` covers the canonical immutable release manifest and release-owned content bytes, not mutable authoring sources;
 - `artifact_hash` covers the final emitted artifact bytes exactly;
+- `build_manifest_hash` covers the exact build-manifest bytes used to describe that artifact;
+- validation receipt identities are stable external evidence references and are serialized in deterministic lexical order;
 - a publisher contract version change is explicit even when the target standard revision does not change.
 
-Identical release bytes, publisher contract ID/version, and target parameters must produce identical artifact bytes and hashes or an identical incompatibility payload.
+Identical release bytes, publisher contract ID/version, target parameters, rendered artifact bytes, build-manifest bytes and validation-receipt identities must produce identical evidence bytes and hashes or an identical incompatibility payload.
 
 ## Initial publisher targets
 
@@ -34,7 +36,7 @@ The QTI 3.0 publisher is reference-only in this baseline: it emits/binds approve
 
 ## Executable Publication Admission boundary
 
-The first executable Rust slice does not yet build packages. It gates one approved immutable release before a target adapter is allowed to emit anything. `evaluate_publication` requires exact release identity, SHA-256 source identity, explicit target, publisher contract/version, target-standard revision and locale. A compatible result means only that target transformation may proceed; it is not an artifact, certification or interoperability-conformance claim.
+`evaluate_publication` gates one approved immutable release before a target adapter is allowed to emit anything. It requires exact release identity, SHA-256 source identity, explicit target, publisher contract/version, target-standard revision and locale. A compatible result means only that target transformation may proceed; it is not an artifact, certification or interoperability-conformance claim.
 
 The currently executable target/contract mapping is one-to-one:
 
@@ -45,13 +47,32 @@ The currently executable target/contract mapping is one-to-one:
 
 Selecting the other target's contract is a hard `ContractTargetMismatch`; no fallback, compatibility alias or cross-conversion is permitted. The other listed publisher targets remain documented future adapters and are not admitted by the current kernel.
 
+## Executable native-web byte-finalization boundary
+
+`finalize_native_web_publication` is the downstream byte-level trust boundary for `native_cwl_xapi_2_0/v1`. It accepts only a trusted compatible `PublicationOutcome`, the exact canonical immutable release bytes, already-emitted native artifact bytes, exact build-manifest bytes, and validation-receipt identities.
+
+Before a publication receipt can exist it must:
+
+1. reject an incompatible admission;
+2. reject any trusted admission that belongs to the cmi5 contract;
+3. recompute SHA-256 over the exact canonical release bytes and compare it with admitted `source_hash`;
+4. reject zero-byte artifact or build-manifest payloads;
+5. reject empty validation-receipt identities, canonically sort them and reject duplicates;
+6. compute SHA-256 over the exact final artifact bytes and exact build-manifest bytes;
+7. return an opaque `NativeWebPublicationReceipt` whose fields cannot be forged through a public constructor.
+
+The admitted source digest may contain upper- or lowercase hexadecimal. Digest comparison is case-insensitive because hexadecimal case is not semantic, while the original admitted identity is preserved verbatim in the receipt.
+
+This boundary **does not render or transform learning content**. It records trustworthy byte provenance after a native renderer has produced bytes. Therefore the existence of a publication receipt is not yet evidence that the repository contains a complete buyer-facing native-web generator or released xAPI 2.0 mapping implementation.
+
 ## Machine-readable result contract
 
 Every publication outcome uses the same target-revision field name, `standard_revision`, so consumers do not need outcome-specific field mapping.
 
-A successful publication artifact records at least:
+A successful native-web publication receipt records:
 
 ```text
+publication_status = published
 content_release_id
 source_hash
 publisher_contract_id
@@ -63,7 +84,7 @@ build_manifest_hash
 validation_receipt_ids
 ```
 
-The current admission kernel emits the common authority fields plus `publication_status` and `blocking_features`; artifact-only hashes/receipt IDs are added by a later target adapter after actual bytes exist.
+`NativeWebPublicationReceipt::canonical_json()` uses a fixed top-level field order and lexically ordered validation-receipt IDs. `artifact_hash` and `build_manifest_hash` are always recomputed from exact bytes at finalization; callers cannot supply trusted hash strings directly.
 
 An incompatible publication returns a deterministic payload with this minimum shape:
 
@@ -103,8 +124,9 @@ The native and cmi5 paths are separate contracts and may not share validation or
 ### `native_cwl_xapi_2_0/v1`
 
 - target: CWL native learning activity;
-- runtime evidence mapping: xAPI 2.0 through released learning-interoperability contracts;
+- runtime evidence mapping: xAPI 2.0 through a released learning-interoperability contract; until that shared contract is released, no complete xAPI 2.0 conformance claim is made;
 - transformation: native release semantics map only through the xAPI 2.0 contract;
+- byte evidence: final emitted bytes must pass `finalize_native_web_publication` before a trusted native publication receipt exists;
 - rejection: no fallback to cmi5/xAPI 1.0.3 semantics is permitted;
 - validation: xAPI 2.0/native contract rules only.
 
