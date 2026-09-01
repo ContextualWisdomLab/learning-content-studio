@@ -17,6 +17,8 @@ evaluate_publication(PublicationRequest)
 
 `PublicationRequest` contains exact immutable release identity, caller-supplied `sha256:` source identity, publisher target, target-owned contract ID, publisher version, target standard revision, locale, approval state and zero or more blocking features. Publication Admission validates SHA-256 syntax but does not possess release bytes and therefore cannot prove digest/content equality. The later byte-producing publisher must recompute the digest over the exact canonical immutable release bytes and compare it before artifact emission.
 
+A successful `PublicationOutcome` is a trusted result of this validation boundary. Its fields and `PublicationMetadata` fields are private outside the crate; callers receive read-only `status()`, `metadata()`, `blocking_features()` and metadata accessors. Downstream code cannot construct or mutate a value that impersonates a validated compatible/incompatible result.
+
 ## Validation order
 
 1. reject an unapproved release;
@@ -32,22 +34,23 @@ No mutable authoring source, wall clock, environment locale, network fetch, rand
 
 ## Deterministic result
 
-`PublicationOutcome::canonical_json()` emits fixed top-level field order. Incompatible blockers are defensively cloned and canonically sorted during serialization, including when a caller directly constructs the public enum instead of obtaining it through `evaluate_publication`; caller vector order therefore cannot change canonical bytes. JSON strings are escaped deterministically, including control characters. This result is admission evidence only; `artifact_hash`, `build_manifest_hash` and validation-receipt IDs are added only after a target adapter creates actual artifact bytes.
+`PublicationOutcome::canonical_json()` emits fixed top-level field order from a validation-only outcome whose blockers were canonically sorted before construction. Compatible outcomes cannot carry blockers; incompatible outcomes always carry at least one blocker. JSON strings are escaped deterministically, including control characters. This result is admission evidence only; `artifact_hash`, `build_manifest_hash` and validation-receipt IDs are added only after a target adapter creates actual artifact bytes.
 
 ## Failure model
 
-Validation is fail-closed. Cross-target contract selection, missing approval, malformed source identity, missing required fields and duplicate blocker identities return typed errors rather than being silently normalized into a compatible decision.
+Validation is fail-closed. Cross-target contract selection, missing approval, malformed source identity, missing required fields and duplicate blocker identities return typed errors rather than being silently normalized into a compatible decision. The trusted outcome type has no public constructor, preventing downstream callers from bypassing those errors by directly assembling metadata or blocker state.
 
 ## Test and coverage contract
 
-`tests/publication_admission.rs` was committed before implementation and subsequent behavior fixes continue test-first. Coverage includes:
+`tests/publication_admission.rs` was committed before implementation and subsequent behavior fixes continue test-first. The bypass regression was captured first in commit `96d97f4dc22fcff30e6a887256711b57f1fa9db1`; production was then repaired in `26f530ca9763b92703b80aa2049d04fe9d74e1c9`. Coverage includes:
 
 - unapproved release rejection;
 - native/cmi5 cross-target contract rejection;
 - missing-prefix, wrong-length and non-hex source-hash rejection;
-- order-independent incompatibility output, including directly constructed outcomes;
+- order-independent incompatibility output;
+- an empty blocker set producing only a compatible trusted outcome;
 - duplicate blocker rejection;
-- compatible authority preservation and canonical JSON;
+- compatible authority preservation through read-only accessors and canonical JSON;
 - every required request/blocker identity empty-field path;
 - JSON quote, backslash, newline, carriage-return, tab, backspace, form-feed, generic control-character and ordinary Unicode escaping paths.
 
