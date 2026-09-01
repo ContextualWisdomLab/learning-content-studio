@@ -20,7 +20,7 @@ evaluate_publication(
 
 `PublicationRequest` contains only caller intent: `content_release_id` and `PublisherTarget`. It has no caller-controlled approval boolean, source hash, locale, publisher contract/version/standard, or blocker vector.
 
-`ReleaseAuthorityPort` owns immutable-release lookup. Its `ReleaseAuthorityEvidence` supplies release identity, SHA-256 source identity, locale, approval state, and stable approval-evidence identity. `TargetCompatibilityPort` owns target validation. Its `TargetCompatibilityEvidence` supplies target, contract/version/standard, stable validation-evidence identity, and zero or more blockers. Production adapters are security-sensitive ACLs and must derive evidence from authoritative stores/services, not request fields or synthetic/demo state.
+`ReleaseAuthorityPort` owns immutable-release lookup. Its `ReleaseAuthorityEvidence` supplies release identity, SHA-256 source identity, locale, approval state, and stable approval-evidence identity. `TargetCompatibilityPort` owns target validation. Its `TargetCompatibilityEvidence` supplies a `CompatibilityReleaseIdentity` containing the exact immutable `content_release_id` and `source_hash` validated, plus target, contract/version/standard, stable validation-evidence identity, and zero or more blockers. Production adapters are security-sensitive ACLs and must derive evidence from authoritative stores/services, not request fields or synthetic/demo state.
 
 ## Validation order
 
@@ -30,10 +30,12 @@ evaluate_publication(
 4. validate authority-owned source hash, locale, and approval-evidence identity;
 5. validate SHA-256 syntax (byte equality is verified later by the byte-owning finalizer);
 6. require target-compatibility evidence and reject evidence for another target;
-7. validate target-owned contract/version/standard/validation-evidence identities;
-8. reject a contract not owned by the requested target;
-9. validate blocker identities, sort by `feature_code`, `source_component_reference`, `reason_code`, and reject exact duplicates;
-10. mint an opaque compatible outcome only when the authority-supplied blocker set is empty; otherwise mint an incompatible outcome.
+7. reject target compatibility evidence whose `content_release_id` does not exactly match release-authority evidence;
+8. reject target compatibility evidence whose `source_hash` does not exactly match release-authority evidence, so stale cached validation cannot authorize different immutable bytes;
+9. validate target-owned contract/version/standard/validation-evidence identities;
+10. reject a contract not owned by the requested target;
+11. validate blocker identities, sort by `feature_code`, `source_component_reference`, `reason_code`, and reject exact duplicates;
+12. mint an opaque compatible outcome only when the authority-supplied blocker set is empty; otherwise mint an incompatible outcome.
 
 No mutable authoring state, caller approval claim, caller blocker omission, wall clock, environment locale, network-fetched content, random ID, or process ordering participates in the decision.
 
@@ -45,19 +47,15 @@ No mutable authoring state, caller approval claim, caller blocker omission, wall
 
 ## Failure model
 
-Validation fails closed with typed errors for unavailable release/compatibility evidence, release/target authority identity mismatch, unapproved release, malformed source identity, cross-target contract, missing authority fields, and duplicate blockers. A caller cannot manufacture compatibility by setting `approved=true` or supplying an empty blocker vector because those fields no longer exist on `PublicationRequest`.
+Validation fails closed with typed errors for unavailable release/compatibility evidence, release/target authority identity mismatch, compatibility evidence bound to another release or source hash, unapproved release, malformed source identity, cross-target contract, missing authority fields, and duplicate blockers. A caller cannot manufacture compatibility by setting `approved=true`, supplying an empty blocker vector, or replaying cached target evidence for another immutable release.
 
 ## Test-first evidence
 
-`tests/authority_ports.rs` was committed in RED state before the authority-port production repair. It requires:
+`tests/authority_ports.rs` was committed in RED state before the authority-port production repair. It requires authority-owned approval/blocker truth, release/target cross-binding, and fail-closed unavailable evidence.
 
-- authority-owned unapproved release rejection;
-- authority-owned blockers to control compatibility rather than caller omission;
-- release-evidence identity cross-binding;
-- target-evidence identity cross-binding;
-- fail-closed behavior when either authority cannot establish evidence.
+The release-binding repair was also test-first. Commit `c8346a5fb1652c02a515b826f856a83e2072ae63` added `tests/compatibility_release_binding.rs` with failing expectations for target evidence produced for another release identity or source hash. Production commit `f00ebc1523a682d35307ea4b14593378d1b8d190` introduced `CompatibilityReleaseIdentity` and typed `CompatibilityReleaseMismatch` / `CompatibilitySourceMismatch` failures before the test fixtures were adapted to the new constructor.
 
-`tests/publication_admission.rs` additionally covers all required identity failures, both target contracts, SHA-256 syntax branches, order-independent blockers, duplicate rejection, authority traceability accessors, compatible/incompatible canonical JSON, and every JSON control-character class.
+`tests/publication_admission.rs` additionally covers required identity failures, both target contracts, SHA-256 syntax branches, order-independent blockers, duplicate rejection, release-bound authority traceability accessors, compatible/incompatible canonical JSON, and every JSON control-character class.
 
 ## Coverage contract
 
