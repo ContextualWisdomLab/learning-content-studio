@@ -1,13 +1,8 @@
-//! Deterministic publication admission and byte-level publication evidence for approved
-//! Learning Content Studio releases.
+//! Deterministic publication admission and byte-bound native-web publication evidence.
 //!
-//! The crate establishes two fail-closed boundaries. Publication admission requires an
-//! approved immutable release, a syntactically valid SHA-256 source identity, an exact
-//! target-specific interoperability contract, and canonically ordered incompatibility
-//! evidence. Native-web finalization then recomputes the admitted source identity from the
-//! exact immutable release bytes and records hashes for the already-emitted artifact and
-//! build manifest. Rendering/transformation remains outside this crate until its canonical
-//! target model is specified.
+//! Publication Admission separates caller intent from immutable release authority and target
+//! compatibility authority. Native-web finalization then verifies the admitted source identity
+//! against exact release bytes and records exact emitted artifact/build-manifest identities.
 
 use sha2::{Digest, Sha256};
 
@@ -52,43 +47,230 @@ impl BlockingFeature {
     }
 }
 
-/// Exact immutable inputs to the publication-admission decision.
+/// Caller intent for one publication-admission decision.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PublicationRequest {
-    /// Immutable content release identity.
-    pub content_release_id: String,
-    /// Caller-supplied SHA-256 identity of the canonical immutable release bytes.
-    ///
-    /// Admission validates digest syntax only. A byte-producing publisher must recompute and
-    /// verify this identity against the exact immutable release bytes before emission.
-    pub source_hash: String,
-    /// Publisher target selected by the caller.
-    pub publisher_target: PublisherTarget,
-    /// Version-specific publisher contract identity.
-    pub publisher_contract_id: String,
-    /// Publisher implementation/contract version.
-    pub publisher_version: String,
-    /// Explicit target-standard revision.
-    pub standard_revision: String,
-    /// Locale pinned in the immutable release.
-    pub locale_code: String,
-    /// Whether the immutable release has completed approval.
-    pub approved: bool,
-    /// Explicit semantic blockers found before target transformation.
-    pub blocking_features: Vec<BlockingFeature>,
+    content_release_id: String,
+    publisher_target: PublisherTarget,
 }
 
-/// Stable metadata preserved by either a compatible or incompatible result.
-///
-/// Fields are intentionally private so callers cannot manufacture metadata that appears to
-/// have passed publication admission. Read-only accessors expose the validated authority.
+impl PublicationRequest {
+    /// Creates caller intent for a release and target.
+    #[must_use]
+    pub fn new(content_release_id: &str, publisher_target: PublisherTarget) -> Self {
+        Self {
+            content_release_id: content_release_id.into(),
+            publisher_target,
+        }
+    }
+
+    /// Returns the requested immutable content release identity.
+    #[must_use]
+    pub fn content_release_id(&self) -> &str {
+        &self.content_release_id
+    }
+
+    /// Returns the requested publisher target.
+    #[must_use]
+    pub fn publisher_target(&self) -> PublisherTarget {
+        self.publisher_target
+    }
+}
+
+/// Evidence returned by the authoritative immutable-release boundary.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReleaseAuthorityEvidence {
+    content_release_id: String,
+    source_hash: String,
+    locale_code: String,
+    approved: bool,
+    approval_evidence_id: String,
+}
+
+impl ReleaseAuthorityEvidence {
+    /// Creates evidence emitted by a release-authority adapter.
+    #[must_use]
+    pub fn new(
+        content_release_id: &str,
+        source_hash: &str,
+        locale_code: &str,
+        approved: bool,
+        approval_evidence_id: &str,
+    ) -> Self {
+        Self {
+            content_release_id: content_release_id.into(),
+            source_hash: source_hash.into(),
+            locale_code: locale_code.into(),
+            approved,
+            approval_evidence_id: approval_evidence_id.into(),
+        }
+    }
+
+    /// Returns the release identity asserted by the authority.
+    #[must_use]
+    pub fn content_release_id(&self) -> &str {
+        &self.content_release_id
+    }
+
+    /// Returns the authority-owned SHA-256 source identity.
+    #[must_use]
+    pub fn source_hash(&self) -> &str {
+        &self.source_hash
+    }
+
+    /// Returns the authority-owned locale.
+    #[must_use]
+    pub fn locale_code(&self) -> &str {
+        &self.locale_code
+    }
+
+    /// Returns whether the release authority reports completed approval.
+    #[must_use]
+    pub fn approved(&self) -> bool {
+        self.approved
+    }
+
+    /// Returns the stable approval evidence identity.
+    #[must_use]
+    pub fn approval_evidence_id(&self) -> &str {
+        &self.approval_evidence_id
+    }
+}
+
+/// Port owned by the immutable-release authority boundary.
+pub trait ReleaseAuthorityPort {
+    /// Returns authoritative evidence for the requested release, or `None` when unavailable.
+    fn release_evidence(&self, content_release_id: &str) -> Option<ReleaseAuthorityEvidence>;
+}
+
+/// Exact immutable-release identity that target compatibility evidence was validated against.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CompatibilityReleaseIdentity {
+    content_release_id: String,
+    source_hash: String,
+}
+
+impl CompatibilityReleaseIdentity {
+    /// Creates an exact release binding for target compatibility evidence.
+    #[must_use]
+    pub fn new(content_release_id: &str, source_hash: &str) -> Self {
+        Self {
+            content_release_id: content_release_id.into(),
+            source_hash: source_hash.into(),
+        }
+    }
+
+    /// Returns the immutable release identity validated by the target authority.
+    #[must_use]
+    pub fn content_release_id(&self) -> &str {
+        &self.content_release_id
+    }
+
+    /// Returns the exact source identity validated by the target authority.
+    #[must_use]
+    pub fn source_hash(&self) -> &str {
+        &self.source_hash
+    }
+}
+
+/// Evidence returned by the target-specific compatibility-validation boundary.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TargetCompatibilityEvidence {
+    release_identity: CompatibilityReleaseIdentity,
+    publisher_target: PublisherTarget,
+    publisher_contract_id: String,
+    publisher_version: String,
+    standard_revision: String,
+    validation_evidence_id: String,
+    blocking_features: Vec<BlockingFeature>,
+}
+
+impl TargetCompatibilityEvidence {
+    /// Creates evidence emitted by a target-compatibility adapter.
+    #[must_use]
+    pub fn new(
+        release_identity: CompatibilityReleaseIdentity,
+        publisher_target: PublisherTarget,
+        publisher_contract_id: &str,
+        publisher_version: &str,
+        standard_revision: &str,
+        validation_evidence_id: &str,
+        blocking_features: Vec<BlockingFeature>,
+    ) -> Self {
+        Self {
+            release_identity,
+            publisher_target,
+            publisher_contract_id: publisher_contract_id.into(),
+            publisher_version: publisher_version.into(),
+            standard_revision: standard_revision.into(),
+            validation_evidence_id: validation_evidence_id.into(),
+            blocking_features,
+        }
+    }
+
+    /// Returns the immutable release identity validated by this evidence.
+    #[must_use]
+    pub fn release_identity(&self) -> &CompatibilityReleaseIdentity {
+        &self.release_identity
+    }
+
+    /// Returns the target validated by this evidence.
+    #[must_use]
+    pub fn publisher_target(&self) -> PublisherTarget {
+        self.publisher_target
+    }
+
+    /// Returns the target-owned contract identity.
+    #[must_use]
+    pub fn publisher_contract_id(&self) -> &str {
+        &self.publisher_contract_id
+    }
+
+    /// Returns the target-owned publisher version.
+    #[must_use]
+    pub fn publisher_version(&self) -> &str {
+        &self.publisher_version
+    }
+
+    /// Returns the target-owned standards revision.
+    #[must_use]
+    pub fn standard_revision(&self) -> &str {
+        &self.standard_revision
+    }
+
+    /// Returns the stable compatibility-validation evidence identity.
+    #[must_use]
+    pub fn validation_evidence_id(&self) -> &str {
+        &self.validation_evidence_id
+    }
+
+    /// Returns blockers asserted by the target validator.
+    #[must_use]
+    pub fn blocking_features(&self) -> &[BlockingFeature] {
+        &self.blocking_features
+    }
+}
+
+/// Port owned by the target-specific compatibility boundary.
+pub trait TargetCompatibilityPort {
+    /// Returns compatibility evidence for the authoritative release and requested target.
+    fn compatibility_evidence(
+        &self,
+        release: &ReleaseAuthorityEvidence,
+        target: PublisherTarget,
+    ) -> Option<TargetCompatibilityEvidence>;
+}
+
+/// Stable metadata preserved by admission and byte-finalized publication evidence.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PublicationMetadata {
     content_release_id: String,
     source_hash: String,
+    release_approval_evidence_id: String,
     publisher_contract_id: String,
     publisher_version: String,
     standard_revision: String,
+    target_validation_evidence_id: String,
     locale_code: String,
 }
 
@@ -100,12 +282,15 @@ impl PublicationMetadata {
     }
 
     /// Returns the SHA-256 source identity represented by this metadata value.
-    ///
-    /// Admission metadata preserves the caller's validated hexadecimal spelling; publication
-    /// receipt metadata uses the canonical lowercase identity recomputed from exact release bytes.
     #[must_use]
     pub fn source_hash(&self) -> &str {
         &self.source_hash
+    }
+
+    /// Returns the release-approval evidence identity.
+    #[must_use]
+    pub fn release_approval_evidence_id(&self) -> &str {
+        &self.release_approval_evidence_id
     }
 
     /// Returns the version-specific publisher contract identity.
@@ -126,7 +311,13 @@ impl PublicationMetadata {
         &self.standard_revision
     }
 
-    /// Returns the locale pinned in the immutable release.
+    /// Returns the target-validation evidence identity.
+    #[must_use]
+    pub fn target_validation_evidence_id(&self) -> &str {
+        &self.target_validation_evidence_id
+    }
+
+    /// Returns the locale pinned by the immutable-release authority.
     #[must_use]
     pub fn locale_code(&self) -> &str {
         &self.locale_code
@@ -143,9 +334,6 @@ pub enum PublicationStatus {
 }
 
 /// Deterministic publication-admission outcome created only by [`evaluate_publication`].
-///
-/// The fields are private by design. External callers can inspect validated state through
-/// read-only accessors but cannot construct or mutate a trusted outcome directly.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PublicationOutcome {
     status: PublicationStatus,
@@ -154,7 +342,7 @@ pub struct PublicationOutcome {
 }
 
 impl PublicationOutcome {
-    /// Returns whether the validated release is compatible or incompatible with the target.
+    /// Returns whether the authority-backed release is compatible or incompatible.
     #[must_use]
     pub fn status(&self) -> PublicationStatus {
         self.status
@@ -166,10 +354,7 @@ impl PublicationOutcome {
         &self.metadata
     }
 
-    /// Returns canonically ordered blocking evidence.
-    ///
-    /// Compatible outcomes always return an empty slice; incompatible outcomes always return
-    /// at least one blocking feature.
+    /// Returns canonically ordered authority-provided blocking evidence.
     #[must_use]
     pub fn blocking_features(&self) -> &[BlockingFeature] {
         &self.blocking_features
@@ -196,12 +381,14 @@ impl PublicationOutcome {
             .collect::<Vec<_>>()
             .join(",");
         format!(
-            "{{\"publication_status\":{},\"content_release_id\":{},\"publisher_contract_id\":{},\"publisher_version\":{},\"standard_revision\":{},\"source_hash\":{},\"locale_code\":{},\"blocking_features\":[{}]}}",
+            "{{\"publication_status\":{},\"content_release_id\":{},\"release_approval_evidence_id\":{},\"publisher_contract_id\":{},\"publisher_version\":{},\"standard_revision\":{},\"target_validation_evidence_id\":{},\"source_hash\":{},\"locale_code\":{},\"blocking_features\":[{}]}}",
             json_string(status),
             json_string(&self.metadata.content_release_id),
+            json_string(&self.metadata.release_approval_evidence_id),
             json_string(&self.metadata.publisher_contract_id),
             json_string(&self.metadata.publisher_version),
             json_string(&self.metadata.standard_revision),
+            json_string(&self.metadata.target_validation_evidence_id),
             json_string(&self.metadata.source_hash),
             json_string(&self.metadata.locale_code),
             blockers,
@@ -210,11 +397,6 @@ impl PublicationOutcome {
 }
 
 /// Byte-bound evidence produced after a native-web artifact has been emitted.
-///
-/// The receipt is deliberately opaque and can only be created by
-/// [`finalize_native_web_publication`], which rechecks compatible admission, native contract
-/// ownership, exact release bytes, emitted artifact bytes, build-manifest bytes and validation
-/// receipt identities.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NativeWebPublicationReceipt {
     metadata: PublicationMetadata,
@@ -258,11 +440,13 @@ impl NativeWebPublicationReceipt {
             .collect::<Vec<_>>()
             .join(",");
         format!(
-            "{{\"publication_status\":\"published\",\"content_release_id\":{},\"publisher_contract_id\":{},\"publisher_version\":{},\"standard_revision\":{},\"source_hash\":{},\"locale_code\":{},\"artifact_hash\":{},\"build_manifest_hash\":{},\"validation_receipt_ids\":[{}]}}",
+            "{{\"publication_status\":\"published\",\"content_release_id\":{},\"release_approval_evidence_id\":{},\"publisher_contract_id\":{},\"publisher_version\":{},\"standard_revision\":{},\"target_validation_evidence_id\":{},\"source_hash\":{},\"locale_code\":{},\"artifact_hash\":{},\"build_manifest_hash\":{},\"validation_receipt_ids\":[{}]}}",
             json_string(&self.metadata.content_release_id),
+            json_string(&self.metadata.release_approval_evidence_id),
             json_string(&self.metadata.publisher_contract_id),
             json_string(&self.metadata.publisher_version),
             json_string(&self.metadata.standard_revision),
+            json_string(&self.metadata.target_validation_evidence_id),
             json_string(&self.metadata.source_hash),
             json_string(&self.metadata.locale_code),
             json_string(&self.artifact_hash),
@@ -294,54 +478,95 @@ pub enum NativeWebPublicationError {
 /// Fail-closed validation errors returned before any publisher may emit an artifact.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AdmissionError {
-    /// The release has not completed approval and is therefore mutable/not publishable.
+    /// The release authority could not establish evidence for the requested release.
+    ReleaseEvidenceUnavailable,
+    /// The release authority returned evidence for another release identity.
+    ReleaseAuthorityMismatch,
+    /// The release has not completed authoritative approval.
     ReleaseNotApproved,
-    /// The source identity is not a lowercase or uppercase 64-hex SHA-256 digest.
+    /// The target authority could not establish compatibility evidence.
+    CompatibilityEvidenceUnavailable,
+    /// The target authority returned evidence for another requested target.
+    CompatibilityAuthorityMismatch,
+    /// Compatibility evidence was produced for another immutable release identity.
+    CompatibilityReleaseMismatch,
+    /// Compatibility evidence was produced for another immutable source hash.
+    CompatibilitySourceMismatch,
+    /// The source identity is not a 64-hex SHA-256 digest prefixed by `sha256:`.
     InvalidSourceHash,
-    /// The chosen target attempted to use another target's interoperability contract.
+    /// The target authority selected a contract not owned by the requested target.
     ContractTargetMismatch,
-    /// A required identity field was empty or whitespace-only.
+    /// A required authority or request identity field was empty or whitespace-only.
     EmptyRequiredField(&'static str),
     /// Two blocking-feature entries had the same canonical three-field identity.
     DuplicateBlockingFeature,
 }
 
-/// Validates an immutable release at the target-specific publication boundary.
+/// Validates caller publication intent against release and target authority ports.
 ///
-/// The function never converts one publisher contract into another. Incompatibility
-/// entries are sorted by `feature_code`, `source_component_reference`, then
-/// `reason_code`, and exact duplicate triples are rejected. The source hash is checked
-/// for SHA-256 syntax here; byte-to-digest verification belongs to the downstream
-/// byte-producing publisher boundary. Successful return values cannot be constructed or
-/// mutated by downstream callers and therefore remain proof that this validation ran.
+/// Target compatibility evidence must carry the exact immutable release identity and source hash
+/// it validated, preventing cached evidence from being replayed for another release.
 ///
 /// # Errors
 ///
-/// Returns [`AdmissionError`] when release approval, source identity, required fields,
-/// target/contract ownership, or blocking-feature uniqueness is invalid.
+/// Returns [`AdmissionError`] when authority evidence is unavailable, mismatched, unapproved,
+/// malformed, cross-target, incomplete, stale for another release, or contains duplicate blocker
+/// identities.
 pub fn evaluate_publication(
-    mut request: PublicationRequest,
+    request: PublicationRequest,
+    release_authority: &dyn ReleaseAuthorityPort,
+    compatibility_authority: &dyn TargetCompatibilityPort,
 ) -> Result<PublicationOutcome, AdmissionError> {
-    if !request.approved {
+    require_non_empty(&request.content_release_id, "content_release_id")?;
+
+    let release = release_authority
+        .release_evidence(&request.content_release_id)
+        .ok_or(AdmissionError::ReleaseEvidenceUnavailable)?;
+    if release.content_release_id != request.content_release_id {
+        return Err(AdmissionError::ReleaseAuthorityMismatch);
+    }
+    if !release.approved {
         return Err(AdmissionError::ReleaseNotApproved);
     }
 
-    require_non_empty(&request.content_release_id, "content_release_id")?;
-    require_non_empty(&request.source_hash, "source_hash")?;
-    require_non_empty(&request.publisher_contract_id, "publisher_contract_id")?;
-    require_non_empty(&request.publisher_version, "publisher_version")?;
-    require_non_empty(&request.standard_revision, "standard_revision")?;
-    require_non_empty(&request.locale_code, "locale_code")?;
-
-    if !is_sha256_identity(&request.source_hash) {
+    require_non_empty(&release.source_hash, "source_hash")?;
+    require_non_empty(&release.locale_code, "locale_code")?;
+    require_non_empty(
+        &release.approval_evidence_id,
+        "release_approval_evidence_id",
+    )?;
+    if !is_sha256_identity(&release.source_hash) {
         return Err(AdmissionError::InvalidSourceHash);
     }
 
-    if request.publisher_contract_id != request.publisher_target.required_contract_id() {
+    let mut compatibility = compatibility_authority
+        .compatibility_evidence(&release, request.publisher_target)
+        .ok_or(AdmissionError::CompatibilityEvidenceUnavailable)?;
+    if compatibility.publisher_target != request.publisher_target {
+        return Err(AdmissionError::CompatibilityAuthorityMismatch);
+    }
+    if compatibility.release_identity.content_release_id != release.content_release_id {
+        return Err(AdmissionError::CompatibilityReleaseMismatch);
+    }
+    if compatibility.release_identity.source_hash != release.source_hash {
+        return Err(AdmissionError::CompatibilitySourceMismatch);
+    }
+
+    require_non_empty(
+        &compatibility.publisher_contract_id,
+        "publisher_contract_id",
+    )?;
+    require_non_empty(&compatibility.publisher_version, "publisher_version")?;
+    require_non_empty(&compatibility.standard_revision, "standard_revision")?;
+    require_non_empty(
+        &compatibility.validation_evidence_id,
+        "target_validation_evidence_id",
+    )?;
+    if compatibility.publisher_contract_id != request.publisher_target.required_contract_id() {
         return Err(AdmissionError::ContractTargetMismatch);
     }
 
-    for feature in &request.blocking_features {
+    for feature in &compatibility.blocking_features {
         require_non_empty(&feature.feature_code, "blocking_feature.feature_code")?;
         require_non_empty(
             &feature.source_component_reference,
@@ -350,8 +575,8 @@ pub fn evaluate_publication(
         require_non_empty(&feature.reason_code, "blocking_feature.reason_code")?;
     }
 
-    request.blocking_features.sort();
-    if request
+    compatibility.blocking_features.sort();
+    if compatibility
         .blocking_features
         .windows(2)
         .any(|pair| pair[0] == pair[1])
@@ -360,14 +585,16 @@ pub fn evaluate_publication(
     }
 
     let metadata = PublicationMetadata {
-        content_release_id: request.content_release_id,
-        source_hash: request.source_hash,
-        publisher_contract_id: request.publisher_contract_id,
-        publisher_version: request.publisher_version,
-        standard_revision: request.standard_revision,
-        locale_code: request.locale_code,
+        content_release_id: release.content_release_id,
+        source_hash: release.source_hash,
+        release_approval_evidence_id: release.approval_evidence_id,
+        publisher_contract_id: compatibility.publisher_contract_id,
+        publisher_version: compatibility.publisher_version,
+        standard_revision: compatibility.standard_revision,
+        target_validation_evidence_id: compatibility.validation_evidence_id,
+        locale_code: release.locale_code,
     };
-    let status = if request.blocking_features.is_empty() {
+    let status = if compatibility.blocking_features.is_empty() {
         PublicationStatus::Compatible
     } else {
         PublicationStatus::Incompatible
@@ -376,28 +603,21 @@ pub fn evaluate_publication(
     Ok(PublicationOutcome {
         status,
         metadata,
-        blocking_features: request.blocking_features,
+        blocking_features: compatibility.blocking_features,
     })
 }
 
 /// Finalizes native-web publication evidence against exact immutable and emitted bytes.
 ///
-/// This function does not render or transform content. It is the byte-producing publisher's
-/// trust boundary after rendering: a compatible native admission is revalidated against the
-/// exact immutable release bytes, then the final artifact and build manifest are SHA-256
-/// identified. Validation-receipt identities are sorted for deterministic output and exact
-/// duplicates are rejected.
-///
-/// Hexadecimal case in the admitted source identity is not semantic. Admission retains the
-/// caller's exact validated spelling, while the receipt records the lowercase SHA-256 identity
-/// recomputed from exact release bytes. Equivalent digest spellings therefore yield identical
-/// publication receipt evidence.
+/// The finalizer requires a trusted compatible native admission, recomputes SHA-256 over the
+/// exact immutable release bytes, hashes the emitted artifact and build manifest, and preserves
+/// release-approval plus target-validation traceability. It does not render learning content or
+/// claim xAPI conformance.
 ///
 /// # Errors
 ///
-/// Returns [`NativeWebPublicationError`] when the admission is incompatible or belongs to the
-/// cmi5 contract, the source bytes do not match admission, emitted byte sets are empty, or
-/// validation-receipt identities are empty/duplicated.
+/// Returns [`NativeWebPublicationError`] for incompatible/non-native admission, source-byte
+/// mismatch, empty emitted byte sets, or invalid validation-receipt identities.
 pub fn finalize_native_web_publication(
     outcome: &PublicationOutcome,
     canonical_release_bytes: &[u8],
@@ -412,8 +632,6 @@ pub fn finalize_native_web_publication(
         return Err(NativeWebPublicationError::WrongPublisherContract);
     }
 
-    // Trusted outcomes are opaque outside this crate and admission guarantees the exact
-    // `sha256:` prefix plus a 64-hex digest, so this slice has no unreachable error branch.
     let admitted_digest = &outcome.metadata.source_hash["sha256:".len()..];
     let recomputed_source_hash = sha256_identity(canonical_release_bytes);
     let recomputed_digest = &recomputed_source_hash["sha256:".len()..];
@@ -442,9 +660,11 @@ pub fn finalize_native_web_publication(
     let receipt_metadata = PublicationMetadata {
         content_release_id: outcome.metadata.content_release_id.clone(),
         source_hash: recomputed_source_hash,
+        release_approval_evidence_id: outcome.metadata.release_approval_evidence_id.clone(),
         publisher_contract_id: outcome.metadata.publisher_contract_id.clone(),
         publisher_version: outcome.metadata.publisher_version.clone(),
         standard_revision: outcome.metadata.standard_revision.clone(),
+        target_validation_evidence_id: outcome.metadata.target_validation_evidence_id.clone(),
         locale_code: outcome.metadata.locale_code.clone(),
     };
 
