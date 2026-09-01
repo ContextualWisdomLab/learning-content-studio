@@ -105,26 +105,45 @@ fn source_bytes_must_match_admitted_release_identity() {
 }
 
 #[test]
-fn source_hash_case_does_not_change_digest_identity() {
+fn equivalent_source_hash_case_produces_identical_receipt_evidence() {
     let uppercase_hash = RELEASE_HASH.to_ascii_uppercase().replacen("SHA256:", "sha256:", 1);
-    let outcome = evaluate_publication(request(
+    let uppercase_outcome = evaluate_publication(request(
         PublisherTarget::NativeWeb,
         "native_cwl_xapi_2_0/v1",
         &uppercase_hash,
     ))
     .expect("uppercase hexadecimal is valid admission identity");
+    let lowercase_outcome = evaluate_publication(request(
+        PublisherTarget::NativeWeb,
+        "native_cwl_xapi_2_0/v1",
+        RELEASE_HASH,
+    ))
+    .expect("lowercase hexadecimal is valid admission identity");
 
-    let receipt = finalize_native_web_publication(
-        &outcome,
+    let uppercase_receipt = finalize_native_web_publication(
+        &uppercase_outcome,
         RELEASE_BYTES,
         ARTIFACT_BYTES,
         MANIFEST_BYTES,
         &[],
     )
-    .expect("digest comparison is case-insensitive");
+    .expect("uppercase digest finalizes");
+    let lowercase_receipt = finalize_native_web_publication(
+        &lowercase_outcome,
+        RELEASE_BYTES,
+        ARTIFACT_BYTES,
+        MANIFEST_BYTES,
+        &[],
+    )
+    .expect("lowercase digest finalizes");
 
-    assert_eq!(receipt.metadata().source_hash(), uppercase_hash);
-    assert_eq!(receipt.artifact_hash(), ARTIFACT_HASH);
+    assert_eq!(uppercase_outcome.metadata().source_hash(), uppercase_hash);
+    assert_eq!(uppercase_receipt.metadata().source_hash(), RELEASE_HASH);
+    assert_eq!(uppercase_receipt, lowercase_receipt);
+    assert_eq!(
+        uppercase_receipt.canonical_json(),
+        lowercase_receipt.canonical_json()
+    );
 }
 
 #[test]
