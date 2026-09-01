@@ -1,6 +1,6 @@
 use learning_content_studio::{
-    evaluate_publication, AdmissionError, BlockingFeature, PublicationOutcome, PublicationRequest,
-    PublisherTarget,
+    AdmissionError, BlockingFeature, PublicationOutcome, PublicationRequest, PublisherTarget,
+    evaluate_publication,
 };
 
 fn request(target: PublisherTarget, contract_id: &str) -> PublicationRequest {
@@ -19,10 +19,7 @@ fn request(target: PublisherTarget, contract_id: &str) -> PublicationRequest {
 
 #[test]
 fn rejects_mutable_or_unapproved_release() {
-    let mut input = request(
-        PublisherTarget::NativeWeb,
-        "native_cwl_xapi_2_0/v1",
-    );
+    let mut input = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
     input.approved = false;
 
     assert_eq!(
@@ -33,10 +30,7 @@ fn rejects_mutable_or_unapproved_release() {
 
 #[test]
 fn rejects_cross_target_contract_selection() {
-    let input = request(
-        PublisherTarget::Cmi5Quartz,
-        "native_cwl_xapi_2_0/v1",
-    );
+    let input = request(PublisherTarget::Cmi5Quartz, "native_cwl_xapi_2_0/v1");
 
     assert_eq!(
         evaluate_publication(input),
@@ -46,10 +40,7 @@ fn rejects_cross_target_contract_selection() {
 
 #[test]
 fn rejects_non_sha256_source_identity() {
-    let mut input = request(
-        PublisherTarget::NativeWeb,
-        "native_cwl_xapi_2_0/v1",
-    );
+    let mut input = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
     input.source_hash = "sha256:not-a-digest".into();
 
     assert_eq!(
@@ -71,26 +62,25 @@ fn incompatibility_is_order_independent_and_machine_readable() {
         "rights_evidence_missing",
     );
 
-    let mut left = request(
-        PublisherTarget::Cmi5Quartz,
-        "cmi5_quartz_xapi_1_0_3/v1",
-    );
+    let mut left = request(PublisherTarget::Cmi5Quartz, "cmi5_quartz_xapi_1_0_3/v1");
     left.blocking_features = vec![first.clone(), second.clone()];
 
-    let mut right = request(
-        PublisherTarget::Cmi5Quartz,
-        "cmi5_quartz_xapi_1_0_3/v1",
-    );
+    let mut right = request(PublisherTarget::Cmi5Quartz, "cmi5_quartz_xapi_1_0_3/v1");
     right.blocking_features = vec![second, first];
 
     let left_outcome = evaluate_publication(left).expect("valid incompatible result");
     let right_outcome = evaluate_publication(right).expect("valid incompatible result");
 
     assert_eq!(left_outcome, right_outcome);
-    assert_eq!(left_outcome.canonical_json(), right_outcome.canonical_json());
-    assert!(left_outcome
-        .canonical_json()
-        .contains("\"publication_status\":\"incompatible\""));
+    assert_eq!(
+        left_outcome.canonical_json(),
+        right_outcome.canonical_json()
+    );
+    assert!(
+        left_outcome
+            .canonical_json()
+            .contains("\"publication_status\":\"incompatible\"")
+    );
 }
 
 #[test]
@@ -100,10 +90,7 @@ fn rejects_duplicate_blocking_feature_identity() {
         "component_7",
         "semantic_loss_required",
     );
-    let mut input = request(
-        PublisherTarget::NativeWeb,
-        "native_cwl_xapi_2_0/v1",
-    );
+    let mut input = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
     input.blocking_features = vec![duplicate.clone(), duplicate];
 
     assert_eq!(
@@ -114,10 +101,7 @@ fn rejects_duplicate_blocking_feature_identity() {
 
 #[test]
 fn compatible_admission_preserves_exact_release_authority() {
-    let input = request(
-        PublisherTarget::NativeWeb,
-        "native_cwl_xapi_2_0/v1",
-    );
+    let input = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
 
     let outcome = evaluate_publication(input).expect("compatible admission");
     match &outcome {
@@ -140,10 +124,7 @@ fn compatible_admission_preserves_exact_release_authority() {
 
 #[test]
 fn rejects_empty_required_identity_fields() {
-    let mut input = request(
-        PublisherTarget::NativeWeb,
-        "native_cwl_xapi_2_0/v1",
-    );
+    let mut input = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
     input.locale_code = " ".into();
 
     assert_eq!(
