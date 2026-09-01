@@ -172,6 +172,13 @@ fn rejects_every_empty_required_identity_field() {
         Err(AdmissionError::EmptyRequiredField("content_release_id"))
     );
 
+    let mut source_hash = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
+    source_hash.source_hash = " \t".into();
+    assert_eq!(
+        evaluate_publication(source_hash),
+        Err(AdmissionError::EmptyRequiredField("source_hash"))
+    );
+
     let mut contract = request(PublisherTarget::NativeWeb, "native_cwl_xapi_2_0/v1");
     contract.publisher_contract_id = " ".into();
     assert_eq!(
