@@ -18,6 +18,7 @@ Evidence established during the active commercialization iteration:
 - PR #6 review defects were repaired test-first: canonical blocker ordering, coverage enforcement, forged trusted outcomes, and missing-vs-malformed `source_hash` classification. The latest source-hash regression was committed first at `cbecbcf98a7426051c343c956346906221d4df1e`, production at `2cb6e32f548f960349902e2a0d18a2c6e78854af`, and its live review thread was resolved only after exact-head verification;
 - two PR #6 informational review notes remain intentionally visible: admission validates digest syntax rather than release bytes, and hexadecimal case remains input identity. The downstream byte-owning boundary in this stack addresses the former without rewriting admission authority;
 - native-web byte-finalization regression/edge-case tests were committed first at `2534b18c3422e6f353cc74c3443f8834d4f58cd2`; production then pinned RustCrypto SHA-256 and implemented the byte evidence boundary;
+- live PR #7 review found that preserving admission digest casing inside the final receipt made equivalent source identities produce different evidence. The regression was committed first at `f0ac99ce16762638e76a5983892c5785db4f36b0`; production was repaired at `084aa22868f32157d13e63c99c9defbe6e9ac34a` by retaining exact caller spelling in admission while canonicalizing receipt `source_hash` to the lowercase recomputed identity;
 - central required-workflow rules target only `~DEFAULT_BRANCH`, so stacked PRs rely on the documented central stacked-review path until they are retargeted onto protected `develop`; no repository-local approval substitute is accepted.
 
 ## Current feature specification
@@ -51,13 +52,14 @@ Admission aggregate/invariants:
 - duplicate blocking-feature triples are invalid at admission;
 - a compatible trusted outcome has zero blockers and an incompatible trusted outcome has at least one blocker;
 - `PublicationOutcome` and `PublicationMetadata` have no external write/constructor surface; validated status, authority metadata and blockers are exposed read-only;
+- admission metadata preserves the exact validated caller-supplied SHA-256 spelling for auditability;
 - canonical JSON output has stable field and array order from the already validated outcome.
 
 Native-web finalization invariants:
 
 - `finalize_native_web_publication` accepts only a trusted compatible outcome owned by `native_cwl_xapi_2_0/v1`;
 - it recomputes SHA-256 from the exact canonical immutable release bytes and fails closed on mismatch with admitted `source_hash`;
-- upper/lower hexadecimal case is treated as the same digest while the already-admitted source identity is preserved verbatim;
+- upper/lower hexadecimal case is treated as the same digest during comparison, while final receipt `source_hash` is the canonical lowercase identity recomputed from exact bytes; equivalent admission spellings therefore produce identical receipt evidence;
 - zero-byte emitted artifacts and zero-byte build manifests are invalid;
 - validation-receipt identities must be non-empty when present, sort lexically, and may not contain exact duplicates;
 - `artifact_hash` and `build_manifest_hash` are computed inside the trusted finalizer from exact bytes rather than supplied by callers;
@@ -82,6 +84,7 @@ The publisher boundary is an anti-corruption layer: cmi5/xAPI 1.0.3, native xAPI
 | --- | --- | --- | --- | --- |
 | No executable release/publisher boundary | Learning Content Studio | PR #1 explicitly states no executable publisher exists | **Partially repaired:** PR #6 supplies trusted admission; native stack adds byte-level finalization evidence | Exact-head fmt/clippy/test/rustdoc/coverage and independent review on both stack levels |
 | Admission source identity was syntax-only | Learning Content Studio | live Devin info note correctly observed admission cannot prove digest/content equality | **Addressed at correct downstream boundary:** native finalizer recomputes exact release SHA-256 before receipt creation | Exact-head tests prove mismatch rejection and case-equivalent digest comparison |
+| Receipt evidence depended on source-hash casing | Learning Content Studio | Devin PR #7 review showed uppercase/lowercase equivalent admitted digests yielded unequal receipt metadata/JSON | **Repaired test-first:** regression `f0ac99ce...`; production `084aa228...`; admission preserves caller spelling but final receipt uses recomputed lowercase identity | Exact-head tests/coverage and independent reviewer confirmation |
 | Canonical JSON depended on caller blocker order | Learning Content Studio | Devin PR #6 review showed equivalent blocker evidence could serialize differently | **Repaired test-first** | Exact-head tests and independent reviewer confirmation |
 | Trusted admission result could be forged by downstream caller | Learning Content Studio | Devin PR #6 review showed public outcome variants/public metadata fields bypassed checks | **Repaired test-first:** regression `96d97f4d...`; production `26f530ca...` | Exact-head tests, rustdoc and independent reviewer confirmation |
 | Missing source identity was misclassified as malformed | Learning Content Studio | Devin PR #6 review showed empty `source_hash` returned `InvalidSourceHash` | **Repaired test-first:** regression `cbecbcf9...`; production `2cb6e32f...` | Exact-head tests and reviewer confirmation |
@@ -107,7 +110,7 @@ The current kernels process identifiers, compatibility evidence and byte buffers
 
 ## Verification matrix
 
-- behavior changes remain test-first: initial admission tests preceded production implementation; canonical-order repair, trusted-outcome opacity and missing-vs-malformed source identity were test-first; native byte-finalization tests were committed at `2534b18c...` before implementation;
+- behavior changes remain test-first: initial admission tests preceded production implementation; canonical-order repair, trusted-outcome opacity and missing-vs-malformed source identity were test-first; native byte-finalization tests were committed at `2534b18c...` before implementation; receipt source-identity canonicalization regression was committed at `f0ac99ce...` before production `084aa228...`;
 - Rust owns deterministic admission, SHA-256 byte identity and publication-receipt logic;
 - no synthetic demo data is consumed by production;
 - public Rust API documentation is mandatory through `missing_docs = "deny"` and rustdoc warnings-as-errors;
