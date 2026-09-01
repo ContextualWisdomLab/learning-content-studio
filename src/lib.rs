@@ -74,83 +74,130 @@ pub struct PublicationRequest {
 }
 
 /// Stable metadata preserved by either a compatible or incompatible result.
+///
+/// Fields are intentionally private so callers cannot manufacture metadata that appears to
+/// have passed publication admission. Read-only accessors expose the validated authority.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PublicationMetadata {
-    /// Immutable content release identity.
-    pub content_release_id: String,
-    /// Caller-supplied SHA-256 identity; syntax-validated by admission, not recomputed here.
-    pub source_hash: String,
-    /// Version-specific publisher contract identity.
-    pub publisher_contract_id: String,
-    /// Publisher implementation/contract version.
-    pub publisher_version: String,
-    /// Explicit target-standard revision.
-    pub standard_revision: String,
-    /// Locale pinned in the immutable release.
-    pub locale_code: String,
+    content_release_id: String,
+    source_hash: String,
+    publisher_contract_id: String,
+    publisher_version: String,
+    standard_revision: String,
+    locale_code: String,
 }
 
-/// Deterministic publication-admission outcome.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum PublicationOutcome {
-    /// The immutable release can proceed to the selected target-specific publisher.
-    Compatible(PublicationMetadata),
+impl PublicationMetadata {
+    /// Returns the immutable content release identity.
+    #[must_use]
+    pub fn content_release_id(&self) -> &str {
+        &self.content_release_id
+    }
+
+    /// Returns the syntax-validated caller-supplied SHA-256 identity.
+    #[must_use]
+    pub fn source_hash(&self) -> &str {
+        &self.source_hash
+    }
+
+    /// Returns the version-specific publisher contract identity.
+    #[must_use]
+    pub fn publisher_contract_id(&self) -> &str {
+        &self.publisher_contract_id
+    }
+
+    /// Returns the publisher implementation/contract version.
+    #[must_use]
+    pub fn publisher_version(&self) -> &str {
+        &self.publisher_version
+    }
+
+    /// Returns the explicit target-standard revision.
+    #[must_use]
+    pub fn standard_revision(&self) -> &str {
+        &self.standard_revision
+    }
+
+    /// Returns the locale pinned in the immutable release.
+    #[must_use]
+    pub fn locale_code(&self) -> &str {
+        &self.locale_code
+    }
+}
+
+/// Trust state of a validated publication-admission outcome.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PublicationStatus {
+    /// The immutable release may proceed to the selected target-specific publisher.
+    Compatible,
     /// Publication must stop because source semantics cannot be preserved.
-    Incompatible {
-        /// Metadata binding the incompatibility to exact release and contract authority.
-        metadata: PublicationMetadata,
-        /// Blocking evidence. [`PublicationOutcome::canonical_json`] sorts this defensively.
-        blocking_features: Vec<BlockingFeature>,
-    },
+    Incompatible,
+}
+
+/// Deterministic publication-admission outcome created only by [`evaluate_publication`].
+///
+/// The fields are private by design. External callers can inspect validated state through
+/// read-only accessors but cannot construct or mutate a trusted outcome directly.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PublicationOutcome {
+    status: PublicationStatus,
+    metadata: PublicationMetadata,
+    blocking_features: Vec<BlockingFeature>,
 }
 
 impl PublicationOutcome {
-    /// Serializes the admission result into deterministic JSON field and array order.
+    /// Returns whether the validated release is compatible or incompatible with the target.
+    #[must_use]
+    pub fn status(&self) -> PublicationStatus {
+        self.status
+    }
+
+    /// Returns validated immutable publication authority metadata.
+    #[must_use]
+    pub fn metadata(&self) -> &PublicationMetadata {
+        &self.metadata
+    }
+
+    /// Returns canonically ordered blocking evidence.
     ///
-    /// Incompatible evidence is defensively sorted even if a caller directly constructs the
-    /// public enum rather than obtaining it from [`evaluate_publication`].
+    /// Compatible outcomes always return an empty slice; incompatible outcomes always return
+    /// at least one blocking feature.
+    #[must_use]
+    pub fn blocking_features(&self) -> &[BlockingFeature] {
+        &self.blocking_features
+    }
+
+    /// Serializes the validated admission result into deterministic JSON field and array order.
     #[must_use]
     pub fn canonical_json(&self) -> String {
-        match self {
-            Self::Compatible(metadata) => format!(
-                "{{\"publication_status\":\"compatible\",\"content_release_id\":{},\"publisher_contract_id\":{},\"publisher_version\":{},\"standard_revision\":{},\"source_hash\":{},\"locale_code\":{},\"blocking_features\":[]}}",
-                json_string(&metadata.content_release_id),
-                json_string(&metadata.publisher_contract_id),
-                json_string(&metadata.publisher_version),
-                json_string(&metadata.standard_revision),
-                json_string(&metadata.source_hash),
-                json_string(&metadata.locale_code),
-            ),
-            Self::Incompatible {
-                metadata,
-                blocking_features,
-            } => {
-                let mut canonical_blockers = blocking_features.clone();
-                canonical_blockers.sort();
-                let blockers = canonical_blockers
-                    .iter()
-                    .map(|feature| {
-                        format!(
-                            "{{\"feature_code\":{},\"source_component_reference\":{},\"reason_code\":{}}}",
-                            json_string(&feature.feature_code),
-                            json_string(&feature.source_component_reference),
-                            json_string(&feature.reason_code),
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join(",");
+        let status = match self.status {
+            PublicationStatus::Compatible => "compatible",
+            PublicationStatus::Incompatible => "incompatible",
+        };
+        let blockers = self
+            .blocking_features
+            .iter()
+            .map(|feature| {
                 format!(
-                    "{{\"publication_status\":\"incompatible\",\"content_release_id\":{},\"publisher_contract_id\":{},\"publisher_version\":{},\"standard_revision\":{},\"source_hash\":{},\"locale_code\":{},\"blocking_features\":[{}]}}",
-                    json_string(&metadata.content_release_id),
-                    json_string(&metadata.publisher_contract_id),
-                    json_string(&metadata.publisher_version),
-                    json_string(&metadata.standard_revision),
-                    json_string(&metadata.source_hash),
-                    json_string(&metadata.locale_code),
-                    blockers,
+                    "{{\"feature_code\":{},\"source_component_reference\":{},\"reason_code\":{}}}",
+                    json_string(&feature.feature_code),
+                    json_string(&feature.source_component_reference),
+                    json_string(&feature.reason_code),
                 )
-            }
-        }
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        format!(
+            "{{\"publication_status\":{},\"content_release_id\":{},\"publisher_contract_id\":{},\"publisher_version\":{},\"standard_revision\":{},\"source_hash\":{},\"locale_code\":{},\"blocking_features\":[{}]}}",
+            json_string(status),
+            json_string(&self.metadata.content_release_id),
+            json_string(&self.metadata.publisher_contract_id),
+            json_string(&self.metadata.publisher_version),
+            json_string(&self.metadata.standard_revision),
+            json_string(&self.metadata.source_hash),
+            json_string(&self.metadata.locale_code),
+            blockers,
+        )
     }
 }
 
@@ -175,7 +222,8 @@ pub enum AdmissionError {
 /// entries are sorted by `feature_code`, `source_component_reference`, then
 /// `reason_code`, and exact duplicate triples are rejected. The source hash is checked
 /// for SHA-256 syntax here; byte-to-digest verification belongs to the downstream
-/// byte-producing publisher boundary.
+/// byte-producing publisher boundary. Successful return values cannot be constructed or
+/// mutated by downstream callers and therefore remain proof that this validation ran.
 ///
 /// # Errors
 ///
@@ -228,15 +276,17 @@ pub fn evaluate_publication(
         standard_revision: request.standard_revision,
         locale_code: request.locale_code,
     };
-
-    if request.blocking_features.is_empty() {
-        Ok(PublicationOutcome::Compatible(metadata))
+    let status = if request.blocking_features.is_empty() {
+        PublicationStatus::Compatible
     } else {
-        Ok(PublicationOutcome::Incompatible {
-            metadata,
-            blocking_features: request.blocking_features,
-        })
-    }
+        PublicationStatus::Incompatible
+    };
+
+    Ok(PublicationOutcome {
+        status,
+        metadata,
+        blocking_features: request.blocking_features,
+    })
 }
 
 fn require_non_empty(value: &str, field: &'static str) -> Result<(), AdmissionError> {
