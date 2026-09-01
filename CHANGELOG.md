@@ -14,12 +14,15 @@
 - Product/technical commercialization gap baseline and DDD context map.
 - Explicit `ReleaseAuthorityPort` and `TargetCompatibilityPort` trust boundaries with authority evidence identities and regression coverage.
 - `CompatibilityReleaseIdentity` binds target-validation evidence to the exact immutable `content_release_id` and `source_hash` it evaluated.
+- Native-web byte finalization computes exact release, artifact, and build-manifest SHA-256 evidence with an opaque `NativeWebPublicationReceipt`.
+- Byte-finalized receipts preserve release-approval and target-validation evidence identities across the admission-to-publication boundary.
 
 ### Changed
 
 - Repository quality execution is pinned to `ubuntu-24.04` and verifies Rust formatting, Clippy, tests, rustdoc, and fail-closed coverage on the exact source revision.
 - `PublicationRequest` now carries caller intent only (`content_release_id` plus target); approval, source identity, locale, contract/version/standard, and blocking features come from authority ports instead of caller assertions.
-- `PublicationOutcome` and `PublicationMetadata` remain externally read-only, and metadata now preserves release-approval and target-validation evidence identities.
-- Target compatibility evidence for another release identity or source hash now fails closed with typed mismatch errors, preventing stale cached validation from authorizing a different immutable release.
+- `PublicationOutcome` and `PublicationMetadata` remain externally read-only, and metadata preserves release-approval and target-validation evidence identities.
+- Target compatibility evidence for another release identity or source hash fails closed with typed mismatch errors, preventing stale cached validation from authorizing a different immutable release.
+- Native-web finalization now consumes the authority-bound admission API rather than predecessor caller-controlled request state, and canonicalizes receipt source identity from exact release bytes.
 - Empty or whitespace-only authority fields remain distinct from malformed SHA-256 identities through typed errors.
 - Coverage enforcement is production-file scoped: every repository `src/` file must have 100% line and branch coverage, so test-only code cannot offset uncovered production paths.
