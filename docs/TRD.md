@@ -2,7 +2,7 @@
 
 ## Scope
 
-This TRD covers the first executable Learning Content Studio publication boundary. It validates one approved immutable release against one target-specific interoperability contract and returns a deterministic compatible/incompatible result. Package generation, persistence, network services and UI are outside this slice.
+This TRD covers the first executable Learning Content Studio trust boundary. It evaluates caller intent for one immutable release/target only after obtaining approval/release evidence from the release authority and semantic compatibility evidence from the target-validation authority. Package generation, persistence, network services, and UI remain outside this slice.
 
 ## Runtime and API
 
@@ -11,55 +11,62 @@ The implementation is a dependency-free Rust library crate in `src/lib.rs` with 
 Primary API:
 
 ```text
-evaluate_publication(PublicationRequest)
-  -> Result<PublicationOutcome, AdmissionError>
+evaluate_publication(
+    PublicationRequest,
+    &dyn ReleaseAuthorityPort,
+    &dyn TargetCompatibilityPort,
+) -> Result<PublicationOutcome, AdmissionError>
 ```
 
-`PublicationRequest` contains exact immutable release identity, caller-supplied `sha256:` source identity, publisher target, target-owned contract ID, publisher version, target standard revision, locale, approval state and zero or more blocking features. Publication Admission validates SHA-256 syntax but does not possess release bytes and therefore cannot prove digest/content equality. The later byte-producing publisher must recompute the digest over the exact canonical immutable release bytes and compare it before artifact emission.
+`PublicationRequest` contains only caller intent: `content_release_id` and `PublisherTarget`. It has no caller-controlled approval boolean, source hash, locale, publisher contract/version/standard, or blocker vector.
 
-A successful `PublicationOutcome` is a trusted result of this validation boundary. Its fields and `PublicationMetadata` fields are private outside the crate; callers receive read-only `status()`, `metadata()`, `blocking_features()` and metadata accessors. Downstream code cannot construct or mutate a value that impersonates a validated compatible/incompatible result.
+`ReleaseAuthorityPort` owns immutable-release lookup. Its `ReleaseAuthorityEvidence` supplies release identity, SHA-256 source identity, locale, approval state, and stable approval-evidence identity. `TargetCompatibilityPort` owns target validation. Its `TargetCompatibilityEvidence` supplies target, contract/version/standard, stable validation-evidence identity, and zero or more blockers. Production adapters are security-sensitive ACLs and must derive evidence from authoritative stores/services, not request fields or synthetic/demo state.
 
 ## Validation order
 
-1. reject an unapproved release;
-2. reject empty required identities;
-3. reject a malformed SHA-256 source identity;
-4. reject a publisher contract that belongs to another target;
-5. reject incomplete blocking-feature identities;
-6. sort blockers by `feature_code`, `source_component_reference`, `reason_code`;
-7. reject exact duplicate blocker triples;
-8. return compatible when no blockers remain, otherwise incompatible.
+1. reject an empty requested release identity;
+2. require release-authority evidence and reject a returned release identity that does not exactly match the request;
+3. reject release authority evidence that is not approved;
+4. validate authority-owned source hash, locale, and approval-evidence identity;
+5. validate SHA-256 syntax (byte equality is verified later by the byte-owning finalizer);
+6. require target-compatibility evidence and reject evidence for another target;
+7. validate target-owned contract/version/standard/validation-evidence identities;
+8. reject a contract not owned by the requested target;
+9. validate blocker identities, sort by `feature_code`, `source_component_reference`, `reason_code`, and reject exact duplicates;
+10. mint an opaque compatible outcome only when the authority-supplied blocker set is empty; otherwise mint an incompatible outcome.
 
-No mutable authoring source, wall clock, environment locale, network fetch, random identifier or process ordering is consulted.
+No mutable authoring state, caller approval claim, caller blocker omission, wall clock, environment locale, network-fetched content, random ID, or process ordering participates in the decision.
 
-## Deterministic result
+## Deterministic result and traceability
 
-`PublicationOutcome::canonical_json()` emits fixed top-level field order from a validation-only outcome whose blockers were canonically sorted before construction. Compatible outcomes cannot carry blockers; incompatible outcomes always carry at least one blocker. JSON strings are escaped deterministically, including control characters. This result is admission evidence only; `artifact_hash`, `build_manifest_hash` and validation-receipt IDs are added only after a target adapter creates actual artifact bytes.
+`PublicationMetadata` records release and target authority evidence identities alongside release/contract/version/standard/source/locale authority. Its fields and `PublicationOutcome` fields are private. Read-only accessors preserve traceability while preventing downstream mutation.
+
+`PublicationOutcome::canonical_json()` emits fixed field order and already-canonical blocker order. Admission evidence does not prove release-byte equality; the downstream native byte finalizer recomputes SHA-256 over exact immutable release bytes before minting artifact provenance.
 
 ## Failure model
 
-Validation is fail-closed. Cross-target contract selection, missing approval, malformed source identity, missing required fields and duplicate blocker identities return typed errors rather than being silently normalized into a compatible decision. The trusted outcome type has no public constructor, preventing downstream callers from bypassing those errors by directly assembling metadata or blocker state.
+Validation fails closed with typed errors for unavailable release/compatibility evidence, release/target authority identity mismatch, unapproved release, malformed source identity, cross-target contract, missing authority fields, and duplicate blockers. A caller cannot manufacture compatibility by setting `approved=true` or supplying an empty blocker vector because those fields no longer exist on `PublicationRequest`.
 
-## Test and coverage contract
+## Test-first evidence
 
-`tests/publication_admission.rs` was committed before implementation and subsequent behavior fixes continue test-first. The bypass regression was captured first in commit `96d97f4dc22fcff30e6a887256711b57f1fa9db1`; production was then repaired in `26f530ca9763b92703b80aa2049d04fe9d74e1c9`. Coverage includes:
+`tests/authority_ports.rs` was committed in RED state before the authority-port production repair. It requires:
 
-- unapproved release rejection;
-- native/cmi5 cross-target contract rejection;
-- missing-prefix, wrong-length and non-hex source-hash rejection;
-- order-independent incompatibility output;
-- an empty blocker set producing only a compatible trusted outcome;
-- duplicate blocker rejection;
-- compatible authority preservation through read-only accessors and canonical JSON;
-- every required request/blocker identity empty-field path;
-- JSON quote, backslash, newline, carriage-return, tab, backspace, form-feed, generic control-character and ordinary Unicode escaping paths.
+- authority-owned unapproved release rejection;
+- authority-owned blockers to control compatibility rather than caller omission;
+- release-evidence identity cross-binding;
+- target-evidence identity cross-binding;
+- fail-closed behavior when either authority cannot establish evidence.
 
-Repository CI runs formatting, Clippy with warnings denied, all-target tests and rustdoc warnings-as-errors on `ubuntu-24.04`. It installs checksum-verified `cargo-llvm-cov` 0.9.0 through a commit-pinned `taiki-e/install-action`, installs exact `nightly-2026-08-30` with `llvm-tools-preview`, requires 100% line coverage, exports LLVM branch coverage, rejects missing/zero branch evidence, and requires `covered == count` for 100% branch coverage. Nightly is isolated to coverage measurement; production/lint/test semantics continue on the runner's stable Rust toolchain.
+`tests/publication_admission.rs` additionally covers all required identity failures, both target contracts, SHA-256 syntax branches, order-independent blockers, duplicate rejection, authority traceability accessors, compatible/incompatible canonical JSON, and every JSON control-character class.
+
+## Coverage contract
+
+Repository CI runs rustfmt, Clippy with warnings denied, all-target tests, and rustdoc warnings-as-errors on `ubuntu-24.04`. Coverage uses pinned `cargo-llvm-cov` 0.9.0 plus exact `nightly-2026-08-30` branch instrumentation. The gate parses LLVM per-file summaries and requires each repository `src/` production file to have 100% line coverage and 100% branch coverage; test-only files cannot offset uncovered production paths. The gate also requires a nonzero production branch denominator.
 
 ## Security and operability
 
-The crate has no external package dependency, network access, filesystem access, secret handling or unsafe Rust. Central Security/SAST/review workflows remain independent merge gates. A central Dependency Review 403 is intentionally not translated into success; repository security capability must be repaired before protected integration.
+The admission crate has no external package dependency, filesystem access, secret handling, or unsafe Rust. Authority-port adapters are explicit privileged boundaries and require least privilege/auditability when persistence or remote services arrive. Central Security/SAST/review workflows remain independent merge gates. Dependency Review HTTP 403 remains a fail-closed control-plane/configuration incident tracked in `ContextualWisdomLab/.github#810`; it is never translated into green.
 
 ## Future boundaries
 
-The next technical slice adds a native-web projection port that consumes only a compatible admission and canonical immutable release bytes. Its first invariant is recomputing `source_hash` from those exact bytes before any artifact is emitted. Persistence follows later with 3NF, two-or-more-word `snake_case` objects and append-only release/publication facts. A service/API boundary is introduced only when durable storage or remote publishing requires one; at that point asynchronous request handling, compose deployment and k6 latency/load evidence become mandatory.
+The native byte-finalization slice consumes only a compatible opaque admission and exact immutable release/artifact/manifest bytes. A full native renderer remains gated on a released shared xAPI 2.0 contract from `ContextualWisdomLab/learning-interoperability-contracts`. Persistence follows with 3NF two-or-more-word `snake_case` objects, append-only immutable authority, explicit transaction/audit semantics, and item-level UPSERT only for mutable indexes. A service/API boundary is introduced only when durable storage or remote publishing requires one; then async handling, compose deployability, observability/recovery, and k6 evidence become mandatory.

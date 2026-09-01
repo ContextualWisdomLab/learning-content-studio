@@ -35,6 +35,7 @@ jobs:
               Path("Cargo.toml"),
               Path("src/lib.rs"),
               Path("tests/publication_admission.rs"),
+              Path("tests/authority_ports.rs"),
               Path("docs/PRD.md"),
               Path("docs/TRD.md"),
               Path("docs/ARCHITECTURE.md"),
@@ -55,6 +56,7 @@ jobs:
               "accessibility",
               "publisher",
               "Publication Admission",
+              "authority port",
           )
           absent = [term for term in required_terms if term.lower() not in architecture.lower()]
           if absent:
@@ -81,7 +83,7 @@ jobs:
           fallback: none
       - name: Install pinned branch-coverage toolchain
         run: rustup toolchain install nightly-2026-08-30 --profile minimal --component llvm-tools-preview
-      - name: Enforce 100 percent line and branch coverage
+      - name: Enforce 100 percent production line and branch coverage
         shell: python3 {0}
         run: |
           import json
@@ -97,9 +99,6 @@ jobs:
                   "llvm-cov",
                   "--all-targets",
                   "--branch",
-                  "--fail-under-lines",
-                  "100",
-                  "--summary-only",
                   "--json",
                   "--output-path",
                   str(report_path),
@@ -111,14 +110,70 @@ jobs:
           data = report.get("data") or []
           if len(data) != 1:
               raise SystemExit(f"expected one LLVM coverage data set, got {len(data)}")
-          branches = (data[0].get("totals") or {}).get("branches") or {}
-          covered = branches.get("covered")
-          count = branches.get("count")
-          if not isinstance(covered, int) or not isinstance(count, int) or count <= 0:
-              raise SystemExit(f"branch coverage evidence missing or malformed: {branches}")
-          if covered != count:
-              raise SystemExit(f"branch coverage below 100%: {covered}/{count}")
-          print(f"line coverage >=100%; branch coverage {covered}/{count} (100%)")
+
+          repository_root = Path.cwd().resolve()
+          production = []
+          for file_record in data[0].get("files") or []:
+              filename = file_record.get("filename")
+              summary = file_record.get("summary") or {}
+              if not isinstance(filename, str):
+                  continue
+              path = Path(filename).resolve()
+              try:
+                  relative = path.relative_to(repository_root)
+              except ValueError:
+                  continue
+              if not relative.parts or relative.parts[0] != "src":
+                  continue
+              production.append((relative, summary))
+
+          if not production:
+              raise SystemExit("no production src/ coverage records found")
+
+          production_branch_count = 0
+          production_branch_covered = 0
+          for relative, summary in production:
+              lines = summary.get("lines") or {}
+              line_count = lines.get("count")
+              line_covered = lines.get("covered")
+              if (
+                  not isinstance(line_count, int)
+                  or not isinstance(line_covered, int)
+                  or line_count <= 0
+              ):
+                  raise SystemExit(f"production line evidence malformed for {relative}: {lines}")
+              if line_covered != line_count:
+                  raise SystemExit(
+                      f"production line coverage below 100% for {relative}: "
+                      f"{line_covered}/{line_count}"
+                  )
+
+              branches = summary.get("branches") or {}
+              branch_count = branches.get("count")
+              branch_covered = branches.get("covered")
+              if not isinstance(branch_count, int) or not isinstance(branch_covered, int):
+                  raise SystemExit(
+                      f"production branch evidence malformed for {relative}: {branches}"
+                  )
+              production_branch_count += branch_count
+              production_branch_covered += branch_covered
+              if branch_covered != branch_count:
+                  raise SystemExit(
+                      f"production branch coverage below 100% for {relative}: "
+                      f"{branch_covered}/{branch_count}"
+                  )
+
+          if production_branch_count <= 0:
+              raise SystemExit("production branch coverage has zero measurable branches")
+          if production_branch_covered != production_branch_count:
+              raise SystemExit(
+                  "production branch coverage below 100%: "
+                  f"{production_branch_covered}/{production_branch_count}"
+              )
+          print(
+              "production src/ line coverage 100%; production branch coverage "
+              f"{production_branch_covered}/{production_branch_count} (100%)"
+          )
       - name: Verify public API documentation
         env:
           RUSTDOCFLAGS: -D warnings

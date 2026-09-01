@@ -8,13 +8,16 @@
 - Deterministic publication contract and publisher targets.
 - Accessibility and learning-content standards traceability.
 - Repository development rules.
-- First executable Rust Publication Admission kernel for approved immutable releases.
+- First executable Rust Publication Admission kernel.
 - Fail-closed native-web vs cmi5 Quartz publisher-contract ownership validation.
 - Deterministic machine-readable incompatibility ordering and duplicate rejection tests.
 - Product/technical commercialization gap baseline and DDD context map.
+- Explicit `ReleaseAuthorityPort` and `TargetCompatibilityPort` trust boundaries with authority evidence identities and regression coverage.
 
 ### Changed
 
-- Repository quality execution is pinned to `ubuntu-24.04` and now verifies Rust formatting, Clippy, tests, and rustdoc on the exact source revision.
-- Trusted publication outcomes and their authority metadata are now externally read-only and can only be constructed by the validated admission path, preventing downstream callers from bypassing approval, hash, contract, or blocker checks.
-- Empty or whitespace-only `source_hash` is now reported as `EmptyRequiredField("source_hash")`; non-empty malformed SHA-256 identities remain `InvalidSourceHash`, preserving a stable machine-readable distinction between missing and malformed publisher input.
+- Repository quality execution is pinned to `ubuntu-24.04` and verifies Rust formatting, Clippy, tests, rustdoc, and fail-closed coverage on the exact source revision.
+- `PublicationRequest` now carries caller intent only (`content_release_id` plus target); approval, source identity, locale, contract/version/standard, and blocking features come from authority ports instead of caller assertions.
+- `PublicationOutcome` and `PublicationMetadata` remain externally read-only, and metadata now preserves release-approval and target-validation evidence identities.
+- Empty or whitespace-only authority fields remain distinct from malformed SHA-256 identities through typed errors.
+- Coverage enforcement is production-file scoped: every repository `src/` file must have 100% line and branch coverage, so test-only code cannot offset uncovered production paths.
