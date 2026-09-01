@@ -16,3 +16,4 @@
 ### Changed
 
 - Repository quality execution is pinned to `ubuntu-24.04` and now verifies Rust formatting, Clippy, tests, and rustdoc on the exact source revision.
+- Trusted publication outcomes and their authority metadata are now externally read-only and can only be constructed by the validated admission path, preventing downstream callers from bypassing approval, hash, contract, or blocker checks.
