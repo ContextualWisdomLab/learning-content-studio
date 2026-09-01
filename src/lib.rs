@@ -150,9 +150,40 @@ pub trait ReleaseAuthorityPort {
     fn release_evidence(&self, content_release_id: &str) -> Option<ReleaseAuthorityEvidence>;
 }
 
+/// Exact immutable-release identity that target compatibility evidence was validated against.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CompatibilityReleaseIdentity {
+    content_release_id: String,
+    source_hash: String,
+}
+
+impl CompatibilityReleaseIdentity {
+    /// Creates an exact release binding for target compatibility evidence.
+    #[must_use]
+    pub fn new(content_release_id: &str, source_hash: &str) -> Self {
+        Self {
+            content_release_id: content_release_id.into(),
+            source_hash: source_hash.into(),
+        }
+    }
+
+    /// Returns the immutable release identity validated by the target authority.
+    #[must_use]
+    pub fn content_release_id(&self) -> &str {
+        &self.content_release_id
+    }
+
+    /// Returns the exact source identity validated by the target authority.
+    #[must_use]
+    pub fn source_hash(&self) -> &str {
+        &self.source_hash
+    }
+}
+
 /// Evidence returned by the target-specific compatibility-validation boundary.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TargetCompatibilityEvidence {
+    release_identity: CompatibilityReleaseIdentity,
     publisher_target: PublisherTarget,
     publisher_contract_id: String,
     publisher_version: String,
@@ -163,8 +194,12 @@ pub struct TargetCompatibilityEvidence {
 
 impl TargetCompatibilityEvidence {
     /// Creates evidence emitted by a target-compatibility adapter.
+    ///
+    /// `release_identity` must identify the exact immutable release bytes that were validated;
+    /// [`evaluate_publication`] rejects cached evidence bound to any other release or source hash.
     #[must_use]
     pub fn new(
+        release_identity: CompatibilityReleaseIdentity,
         publisher_target: PublisherTarget,
         publisher_contract_id: &str,
         publisher_version: &str,
@@ -173,6 +208,7 @@ impl TargetCompatibilityEvidence {
         blocking_features: Vec<BlockingFeature>,
     ) -> Self {
         Self {
+            release_identity,
             publisher_target,
             publisher_contract_id: publisher_contract_id.into(),
             publisher_version: publisher_version.into(),
@@ -180,6 +216,12 @@ impl TargetCompatibilityEvidence {
             validation_evidence_id: validation_evidence_id.into(),
             blocking_features,
         }
+    }
+
+    /// Returns the immutable release identity validated by this evidence.
+    #[must_use]
+    pub fn release_identity(&self) -> &CompatibilityReleaseIdentity {
+        &self.release_identity
     }
 
     /// Returns the target validated by this evidence.
@@ -378,6 +420,10 @@ pub enum AdmissionError {
     CompatibilityEvidenceUnavailable,
     /// The target authority returned evidence for another requested target.
     CompatibilityAuthorityMismatch,
+    /// Compatibility evidence was produced for another immutable release identity.
+    CompatibilityReleaseMismatch,
+    /// Compatibility evidence was produced for another immutable source hash.
+    CompatibilitySourceMismatch,
     /// The source identity is not a 64-hex SHA-256 digest prefixed by `sha256:`.
     InvalidSourceHash,
     /// The target authority selected a contract not owned by the requested target.
@@ -393,12 +439,15 @@ pub enum AdmissionError {
 /// The caller cannot assert approval, source identity, locale, target contract/version/standard,
 /// or compatibility blockers through [`PublicationRequest`]. Those facts are read from the two
 /// supplied authority ports and cross-bound to the requested release/target before an opaque
-/// [`PublicationOutcome`] is created.
+/// [`PublicationOutcome`] is created. Target compatibility evidence must also carry the exact
+/// immutable release identity and source hash it validated, preventing stale cached evidence from
+/// being replayed for another release.
 ///
 /// # Errors
 ///
 /// Returns [`AdmissionError`] when authority evidence is unavailable, mismatched, unapproved,
-/// malformed, cross-target, incomplete, or contains duplicate blocker identities.
+/// malformed, cross-target, incomplete, stale for another release, or contains duplicate blocker
+/// identities.
 pub fn evaluate_publication(
     request: PublicationRequest,
     release_authority: &dyn ReleaseAuthorityPort,
@@ -431,6 +480,12 @@ pub fn evaluate_publication(
         .ok_or(AdmissionError::CompatibilityEvidenceUnavailable)?;
     if compatibility.publisher_target != request.publisher_target {
         return Err(AdmissionError::CompatibilityAuthorityMismatch);
+    }
+    if compatibility.release_identity.content_release_id != release.content_release_id {
+        return Err(AdmissionError::CompatibilityReleaseMismatch);
+    }
+    if compatibility.release_identity.source_hash != release.source_hash {
+        return Err(AdmissionError::CompatibilitySourceMismatch);
     }
 
     require_non_empty(
