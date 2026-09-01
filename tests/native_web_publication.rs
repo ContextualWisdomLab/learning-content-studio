@@ -106,7 +106,9 @@ fn source_bytes_must_match_admitted_release_identity() {
 
 #[test]
 fn equivalent_source_hash_case_produces_identical_receipt_evidence() {
-    let uppercase_hash = RELEASE_HASH.to_ascii_uppercase().replacen("SHA256:", "sha256:", 1);
+    let uppercase_hash = RELEASE_HASH
+        .to_ascii_uppercase()
+        .replacen("SHA256:", "sha256:", 1);
     let uppercase_outcome = evaluate_publication(request(
         PublisherTarget::NativeWeb,
         "native_cwl_xapi_2_0/v1",
