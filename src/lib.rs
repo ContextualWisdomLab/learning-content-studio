@@ -472,7 +472,15 @@ fn is_sha256_identity(value: &str) -> bool {
 }
 
 fn sha256_identity(bytes: &[u8]) -> String {
-    format!("sha256:{:x}", Sha256::digest(bytes))
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let digest = Sha256::digest(bytes);
+    let mut identity = String::with_capacity("sha256:".len() + digest.len() * 2);
+    identity.push_str("sha256:");
+    for &byte in digest.iter() {
+        identity.push(char::from(HEX[usize::from(byte >> 4)]));
+        identity.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    identity
 }
 
 fn json_string(value: &str) -> String {
