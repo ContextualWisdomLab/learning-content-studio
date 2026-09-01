@@ -86,8 +86,10 @@ jobs:
         run: |
           import json
           import subprocess
+          from pathlib import Path
 
-          report_path = "target/llvm-cov/coverage.json"
+          report_path = Path("target/llvm-cov/coverage.json")
+          report_path.parent.mkdir(parents=True, exist_ok=True)
           subprocess.run(
               [
                   "cargo",
@@ -100,11 +102,11 @@ jobs:
                   "--summary-only",
                   "--json",
                   "--output-path",
-                  report_path,
+                  str(report_path),
               ],
               check=True,
           )
-          with open(report_path, encoding="utf-8") as handle:
+          with report_path.open(encoding="utf-8") as handle:
               report = json.load(handle)
           data = report.get("data") or []
           if len(data) != 1:
