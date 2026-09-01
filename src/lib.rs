@@ -237,6 +237,7 @@ pub fn evaluate_publication(
     }
 
     require_non_empty(&request.content_release_id, "content_release_id")?;
+    require_non_empty(&request.source_hash, "source_hash")?;
     require_non_empty(&request.publisher_contract_id, "publisher_contract_id")?;
     require_non_empty(&request.publisher_version, "publisher_version")?;
     require_non_empty(&request.standard_revision, "standard_revision")?;
