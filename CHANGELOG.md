@@ -8,3 +8,11 @@
 - Deterministic publication contract and publisher targets.
 - Accessibility and learning-content standards traceability.
 - Repository development rules.
+- First executable Rust Publication Admission kernel for approved immutable releases.
+- Fail-closed native-web vs cmi5 Quartz publisher-contract ownership validation.
+- Deterministic machine-readable incompatibility ordering and duplicate rejection tests.
+- Product/technical commercialization gap baseline and DDD context map.
+
+### Changed
+
+- Repository quality execution is pinned to `ubuntu-24.04` and now verifies Rust formatting, Clippy, tests, and rustdoc on the exact source revision.
