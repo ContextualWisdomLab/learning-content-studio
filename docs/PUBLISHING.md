@@ -32,6 +32,15 @@ Identical release bytes, publisher contract ID/version, and target parameters mu
 
 The QTI 3.0 publisher is reference-only in this baseline: it emits/binds approved QTI assessment references or metadata and does not claim complete course-to-QTI package conversion.
 
+The initial xAPI target/contract ownership is one-to-one:
+
+| Publisher target | Required version-specific contract |
+| --- | --- |
+| `native_web_publisher` | `native_cwl_xapi_2_0/v1` |
+| `cmi5_quartz_publisher` | `cmi5_quartz_xapi_1_0_3/v1` |
+
+Selecting the other target's contract is rejected. A publisher must not treat these contract IDs as aliases or silently cross-convert native xAPI 2.0 and cmi5 Quartz/xAPI 1.0.3 semantics.
+
 ## Machine-readable result contract
 
 Every publication outcome uses the same target-revision field name, `standard_revision`, so consumers do not need outcome-specific field mapping.
