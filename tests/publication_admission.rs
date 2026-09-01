@@ -1,3 +1,5 @@
+//! Regression and edge-case contract tests for deterministic publication admission.
+
 use learning_content_studio::{
     AdmissionError, BlockingFeature, PublicationOutcome, PublicationRequest, PublisherTarget,
     evaluate_publication,
