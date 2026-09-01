@@ -2,29 +2,28 @@
 
 ## Product responsibility
 
-Learning Content Studio is the ContextualWisdomLab LCMS and authoring authority. It owns mutable authoring state, reusable learning objects and assets, review/approval, accessibility/localization/rights evidence, immutable `content_release` authority, and deterministic target-specific publication projections. Enrollment/completion, xAPI record truth, psychometric response/scoring truth, and payment truth remain outside this bounded context.
+Learning Content Studio is the ContextualWisdomLab LCMS and authoring authority. It owns mutable authoring state, reusable learning objects and assets, review/approval, accessibility/localization/rights evidence, immutable `content_release` authority, publication admission, and deterministic target-specific publication evidence. Enrollment/completion, xAPI record truth, psychometric response/scoring truth, and payment truth remain outside this bounded context.
 
 ## Exact-head evidence contract
 
-This baseline applies to the exact Git commit that contains it. Every merge decision must bind to the live PR head SHA, not a predecessor description or merge candidate. The current implementation branch is `agent/publishing-admission-kernel`, stacked on `agent/bootstrap-learning-content-studio`; GitHub PR metadata is the canonical live SHA source.
+This baseline applies to the exact Git commit that contains it. GitHub PR and branch metadata are the authority for the current SHA; predecessor workflow, review, or merge-candidate evidence is never promoted to a successor head. The active stack is `agent/bootstrap-learning-content-studio` -> `agent/publishing-admission-kernel` -> `agent/native-web-artifact-projection`.
 
-Evidence established during the active commercialization iteration:
+Live evidence re-fetched during the current commercialization iteration:
 
-- repository is public, organization-owned, and `fork=false`;
-- parent PR #1 is open, Ready, mechanically mergeable, and all observed inline review threads are resolved;
-- CodeRabbit and Devin status contexts succeeded on the parent exact head;
-- Semgrep completed successfully on the parent exact head; central Security Scan remains failed because Dependency Review received GitHub HTTP 403 for the exact base/head dependency-graph comparison;
-- parent repository quality remains queued on `ubuntu-latest`; this implementation pins `ubuntu-24.04`, and an earlier implementation head completed formatting, Clippy, tests, and rustdoc on an assigned Ubuntu 24.04 runner;
-- Devin review identified a canonical-serialization ordering defect and missing coverage gate. The ordering regression was committed before its production repair and the quality lane now enforces checksum-verified 100% line and branch coverage;
-- a later Devin review found that public `PublicationOutcome` variants and public `PublicationMetadata` fields allowed downstream callers to manufacture apparently trusted compatible/incompatible results without running admission validation. Regression expectations were committed first at `96d97f4dc22fcff30e6a887256711b57f1fa9db1`; production was repaired at `26f530ca9763b92703b80aa2049d04fe9d74e1c9`; the trusted outcome and metadata are now externally read-only and created only by `evaluate_publication`;
-- current-head review then found that an empty `source_hash` was being collapsed into `InvalidSourceHash`, making missing input indistinguishable from a non-empty malformed digest. The regression was committed first at `cbecbcf98a7426051c343c956346906221d4df1e`; production was repaired at `2cb6e32f548f960349902e2a0d18a2c6e78854af` by applying the required-field check before SHA-256 syntax validation;
-- central required-workflow rules on this repository target only `~DEFAULT_BRANCH`, so stacked PR #6 does not receive injected OpenCode/Noema/Security workflows. The central `.github` control plane documents a rotating `org-queue-sweep` review path for stacked work; no local approval substitute is accepted.
+- the repository is public, organization-owned, and `fork=false`;
+- parent PR #1 is open, Ready, and mechanically mergeable at exact head `7b8e0472451ab095301b7a5e40b1f99cd8af584b`; all observed inline review threads are resolved and CodeRabbit/Devin status contexts are successful;
+- parent exact-head Learning Content Studio Quality run `33550893313` and SAST Semgrep run `33550893331` completed successfully;
+- parent exact-head Security Scan run `33550893471` failed only in `dependency-review`: exact checkout succeeded, OSV/Trivy/Scorecard succeeded, and the authoritative dependency-graph comparison returned HTTP 403. ContextualWisdomLab/.github issue #810 already owns this fail-closed availability/configuration incident; no leaf-repository gate weakening is authorized;
+- the live organization ruleset targets the protected default branch, requires one approving review and resolved review threads, and injects the central required workflow set. No self-approval, routine admin bypass, synthetic approval, or ruleset weakening is accepted;
+- this PR was non-destructively restacked on the current PR #1 head with a regular two-parent merge. The parent advance added only `docs/index.md`; the post-restack compare shows the implementation branch is ahead of the current parent with no missing parent commit;
+- the restack triggered a fresh exact-head Learning Content Studio Quality run. Until that run is terminal, predecessor repository-quality success remains lineage only;
+- downstream PR #7 already implements the next byte-finalization slice and is restacked only after this parent moves; each downstream head must regenerate its own exact-head checks/reviews.
 
 ## Current feature specification
 
 ### Publication Admission bounded context
 
-The first executable commercialization slice is a Rust fail-closed admission kernel in `src/lib.rs`.
+`src/lib.rs` implements a Rust fail-closed admission kernel for one approved immutable release and one selected publisher target.
 
 Ubiquitous language:
 
@@ -33,72 +32,94 @@ Ubiquitous language:
 - **publisher contract**: version-specific transformation/validation boundary owned by one target;
 - **blocking feature**: source semantic that cannot be preserved by the selected target;
 - **publication admission**: deterministic decision allowing target transformation or returning incompatibility evidence;
-- **trusted publication outcome**: an immutable result that can only be created after the admission invariants succeed.
+- **trusted publication outcome**: immutable result that can only be constructed after admission invariants succeed;
+- **native-web publication receipt**: downstream byte-bound evidence produced only after exact release-byte verification.
 
-Aggregate/invariants:
+Admission invariants:
 
-- `PublicationRequest` is the transaction boundary for one immutable release and one selected target;
-- release approval is mandatory before admission;
-- `source_hash` is a required non-empty identity field and must then satisfy the explicit SHA-256 syntax contract; admission validates syntax only because it does not own release bytes, and the later byte-producing publisher must recompute/compare the digest before emission;
-- missing/whitespace-only `source_hash` returns `EmptyRequiredField("source_hash")`, while a non-empty malformed digest returns `InvalidSourceHash`;
+- `PublicationRequest` is the minimal transaction boundary for one release-target decision;
+- release approval is mandatory;
+- `source_hash` is required and non-blank before SHA-256 syntax validation;
+- missing/whitespace-only `source_hash` returns `EmptyRequiredField("source_hash")`; non-empty malformed digests return `InvalidSourceHash`;
 - `native_web_publisher` admits only `native_cwl_xapi_2_0/v1`;
 - `cmi5_quartz_publisher` admits only `cmi5_quartz_xapi_1_0_3/v1`;
 - cross-target contract selection fails closed;
-- blocking features sort by `feature_code`, `source_component_reference`, then `reason_code` before trusted outcome construction;
-- duplicate blocking-feature triples are invalid at admission;
-- a compatible trusted outcome has zero blockers and an incompatible trusted outcome has at least one blocker;
-- `PublicationOutcome` and `PublicationMetadata` have no external write/constructor surface; validated status, authority metadata and blockers are exposed read-only;
-- compatible and incompatible outcomes bind the same release/contract/version/standard/locale authority;
-- canonical JSON output has stable field and array order from the already validated outcome.
+- blocking features sort by `feature_code`, `source_component_reference`, then `reason_code`;
+- duplicate blocking-feature triples are invalid;
+- compatible outcomes have zero blockers; incompatible outcomes have at least one;
+- `PublicationOutcome` and `PublicationMetadata` have no external write/constructor authority; downstream callers cannot manufacture a trusted compatible result;
+- canonical JSON is deterministic after validation.
 
-Domain events are not persisted in this first slice. A future persistence boundary may emit `content_release_approved`, `publication_admitted`, and `publication_rejected` events only after durable transaction semantics are defined.
+Review-discovered defects were repaired test-first: canonical blocker ordering, forged trusted outcomes/metadata, missing-vs-malformed `source_hash`, and mandatory 100% line/branch coverage. The source-hash regression was introduced at `cbecbcf98a7426051c343c956346906221d4df1e` before production repair `2cb6e32f548f960349902e2a0d18a2c6e78854af`.
 
-## DDD context map
+## Domain-driven design
 
-- **Core subdomain — Content Authoring & Release:** mutable authoring projects, revisions, review/approval and immutable releases.
-- **Supporting subdomain — Publication Admission & Projection:** deterministic compatibility decision and target-specific projection.
-- **Supporting subdomain — Rights & Accessibility Evidence:** release-gating evidence referenced by immutable release identity.
-- **Generic subdomain — Artifact Storage / Delivery:** object storage, CDN, registry and deployment mechanisms; these must remain behind ports/ACLs and must not become authoring truth.
+- **Core subdomain — Content Authoring & Release:** mutable authoring projects, revisions, approvals, and immutable releases.
+- **Supporting subdomain — Publication Admission & Projection:** compatibility decisions, target-specific transformation boundaries, and byte-provenance receipts.
+- **Supporting subdomain — Rights & Accessibility Evidence:** release-gating evidence referenced by immutable identity.
+- **Generic subdomain — Artifact Storage / Delivery:** object storage, CDN, registry, telemetry, and deployment behind explicit ports/ACLs.
 
-The publisher boundary is an anti-corruption layer: cmi5/xAPI 1.0.3, native xAPI 2.0, SCORM, Common Cartridge and bounded QTI 3.0 semantics may not leak into the canonical authoring model.
+The context map is:
+
+```text
+Authoring Surface (Inkspan ACL)
+          |
+          v
+Content Authoring & Release ----> Rights & Accessibility Evidence
+          |
+          | approved immutable content_release
+          v
+Publication Admission
+          |
+          +----> Native Web Renderer ----> Native Web Finalization
+          +----> cmi5 Quartz adapter
+          +----> later versioned adapters
+                          |
+                          v
+                 Artifact Storage / Delivery
+```
+
+The publisher boundary is an anti-corruption layer. xAPI/cmi5/SCORM/Common Cartridge/QTI semantics must not become canonical authoring entities, and shared learning-interoperability contracts must be consumed from released ContextualWisdomLab/learning-interoperability-contracts schemas rather than copied locally.
+
+Current aggregate/value-object direction: future `ContentProject` and immutable `ContentRelease` aggregate roots; current `PublicationRequest`, `PublicationMetadata`, `BlockingFeature`, and opaque `PublicationOutcome` value/domain objects; `evaluate_publication` as the current domain service. Domain events such as `content_release_approved`, `publication_admitted`, `publication_rejected`, and `native_publication_finalized` are deferred until durable transaction semantics exist.
 
 ## Commercialization gaps
 
 | Gap | Owner | Live evidence | Action/state | Next verification |
 | --- | --- | --- | --- | --- |
-| No executable release/publisher boundary | Learning Content Studio | PR #1 explicitly states no executable publisher exists | **In progress:** Rust Publication Admission kernel and tests in PR #6 | Exact-head fmt/clippy/test/rustdoc/coverage plus independent review |
-| Canonical JSON depended on caller blocker order | Learning Content Studio | Devin PR #6 review showed equivalent blocker evidence could serialize differently | **Repaired test-first** | Exact-head tests and independent reviewer confirmation |
-| Trusted admission result could be forged by downstream caller | Learning Content Studio | Devin PR #6 review showed public outcome variants/public metadata fields bypassed approval/hash/contract checks | **Repaired test-first:** regression expectations `96d97f4d...`; production `26f530ca...`; outcomes/metadata are opaque with read-only accessors | Exact-head tests, rustdoc and independent reviewer confirmation |
-| Missing source identity was misclassified as malformed | Learning Content Studio | Devin PR #6 review showed empty `source_hash` returned `InvalidSourceHash` | **Repaired test-first:** regression `cbecbcf9...`; production `2cb6e32f...`; missing vs malformed machine-readable errors are distinct | Exact-head tests and reviewer confirmation |
-| 100% coverage mandate was unenforced | Learning Content Studio | Devin PR #6 review found tests ran without line/branch measurement | **Repaired:** pinned `cargo-llvm-cov` 0.9.0 + exact nightly branch instrumentation; line and branch evidence fail closed below 100% | Exact-head coverage workflow succeeds with nonzero branch count |
-| Repository quality lane can wait indefinitely on `ubuntu-latest` | Learning Content Studio | PR #1 quality run remained queued while central jobs obtained `ubuntu-24.04` runners | **Repaired in PR #6:** pin repository quality to `ubuntu-24.04` | Latest exact head obtains a runner and executes expanded coverage lane |
-| Dependency Review cannot obtain evidence | GitHub repository security configuration / organization control plane | central Security Scan parent exact-head probe returned HTTP 403 | **Blocked, fail-closed:** do not bypass or convert to green skip | Enable/repair dependency-graph capability or token entitlement, then rerun exact-head Security Scan after retargeting to protected default |
-| Stacked OpenCode evidence not yet materialized | ContextualWisdomLab/.github control plane | default-branch ruleset does not inject workflows into stack bases; documented rotating `org-queue-sweep` is the intended fallback | **Existing causal repair path verified; no unsafe local substitute added** | Central sweep dispatches PR #6 exact head and a current-head OpenCode receipt appears |
-| No immutable release persistence | Learning Content Studio | no schema/migration/repository implementation exists | Open | Define 3NF `content_release`, `release_component`, `release_asset`, `release_approval`, `publication_receipt`; item-level UPSERT only for mutable authoring indexes, never immutable releases |
-| No target artifact generator | Learning Content Studio | admission slice deliberately emits no package/artifact | Open | Implement native-web projection first with recomputed source digest and byte-identical fixture proof; then cmi5 Quartz behind its distinct contract |
-| No buyer-facing authoring workflow | Learning Content Studio | no application/UI/Storybook/Figma evidence exists | Open | Implement review→accessibility/rights gate→approval→release flow; verify keyboard/touch/screen-reader/error recovery before GA |
-| No operability/deployment baseline | Learning Content Studio | no service/container/runtime exists | Open | Add service only when publisher/storage workflow requires it; then compose deployment, observability, recovery and k6 evidence |
-| No release/package evidence | Learning Content Studio | no product release/tag/package exists | Open | Publish only after protected integration, SBOM/provenance, reproducible artifacts and public API maturity |
-| CEFR assessment-content vertical | Learning Content Studio + learning-interoperability-contracts | Issues #4/#5 require a released shared contract | Dependency-gated | Consume released `cwl_cefr_language_assessment/v1`; do not duplicate shared schema or protected descriptor prose |
+| Documentation-only foundation | Learning Content Studio | PR #1 has no installable application/service/publisher | **Partially repaired:** PR #6 adds executable Rust admission | Fresh exact-head fmt/clippy/test/rustdoc/coverage and independent review |
+| Trusted outcome forgery | Learning Content Studio | review showed public variants/metadata could bypass admission | **Repaired test-first** with opaque trusted outcome/metadata | Fresh exact-head tests + reviewer confirmation |
+| Missing source identity misclassified | Learning Content Studio | review showed blank `source_hash` became `InvalidSourceHash` | **Repaired test-first** | Fresh exact-head tests + reviewer confirmation |
+| Canonical blocker order depended on caller order | Learning Content Studio | review demonstrated equivalent evidence serialized differently | **Repaired test-first** | Fresh exact-head tests + reviewer confirmation |
+| Coverage mandate unenforced | Learning Content Studio | earlier quality lane ran tests without coverage proof | **Repaired:** pinned `cargo-llvm-cov` 0.9.0 + exact nightly branch instrumentation | Fresh exact-head line/branch gate must reach 100% |
+| Dependency Review authoritative evidence unavailable | ContextualWisdomLab/.github / GitHub security configuration | PR #1 exact Security Scan returned HTTP 403 on dependency-graph compare while sibling scanners passed | **Fail-closed; canonical incident #810** | Authorized owner/configuration repair, then unchanged-head HTTP 200 canary where pinned dependency-review action executes |
+| Stacked central review evidence | ContextualWisdomLab/.github | org ruleset injects required workflows only on protected default branch | **No local substitute:** use central stacked-review path, then retarget after parent integration | Current-head OpenCode/Noema evidence or protected retarget |
+| Native byte-finalization not protected-integrated | Learning Content Studio | downstream PR #7 implements exact-byte SHA-256 receipts but remains stacked | **In progress downstream** | Restack on every parent move; exact-head checks/reviews; protected integration after #6 |
+| No actual native renderer/package generator | Learning Content Studio + learning-interoperability-contracts | finalizer accepts already-emitted bytes and claims no renderer/conformance | Open/dependency-gated | Release shared xAPI 2.0 contract, implement deterministic renderer/manifest builder, feed exact bytes to finalizer, prove byte-identical fixtures |
+| No immutable release/publication persistence | Learning Content Studio | no schema/migration/repository implementation | Open | 3NF append-only release/publication authority with explicit transaction boundaries and tested idempotency for mutable indexes only |
+| No buyer-facing authoring workflow | Learning Content Studio | no application/UI/Storybook/Figma evidence | Open | Implement review -> accessibility/rights -> approval -> release workflow with accessibility and error-recovery evidence |
+| No operability/deployment baseline | Learning Content Studio | no service/container/runtime | Open | Add service only when storage/publisher workflow requires it; then compose, observability, recovery, and k6 evidence |
+| No public product release | Learning Content Studio | no release/tag/package | Open | Protected integration, SBOM/provenance, reproducible artifacts, public API maturity, then release |
+| CEFR assessment-content vertical | Learning Content Studio + learning-interoperability-contracts | shared contract is not yet released | Dependency-gated | Consume released `cwl_cefr_language_assessment/v1`; do not duplicate schema authority |
 
 ## Persistence and data design guardrails
 
-No relational schema is introduced by the admission kernel. When persistence arrives, authoritative relational objects use two-or-more-word `snake_case` names, remain in 3NF, and separate mutable authoring facts from immutable release/publication facts. Generic one-word persistence object names such as a table named `id` are forbidden. Immutable release rows are append-only; publication receipts reference exact release and contract identities. Hot publication/read paths should be separated from authoring writes when contention evidence appears rather than pre-emptively denormalizing truth.
+No database is introduced by the current admission kernel. Future authoritative relational objects use two-or-more-word `snake_case` names and remain in 3NF. Candidate objects include `content_release`, `release_component`, `release_asset`, `release_approval`, and `publication_receipt`; a generic one-word persistence object such as a table named `id` is invalid. Immutable release/publication facts are append-only. Item-level UPSERT is reserved for explicitly mutable authoring/index facts with tested idempotency keys and must never overwrite immutable authority. Read/write separation or materialized projections are introduced only from measured contention/load evidence.
 
-## Security, compliance and privacy
+## Security, compliance, and privacy
 
-The current kernel processes identifiers and compatibility evidence only; it does not require PII. Security remains fail-closed when dependency evidence is unavailable. Future author/reviewer identity and rights/consent data must use least-privilege access, auditability, retention policy and encryption appropriate to SOC 2/CSAP objectives. Real people or institutions must not appear in fixtures.
+The current kernel processes identifiers and compatibility evidence and requires no PII. Dependency evidence remains fail-closed. Future reviewer/author identity, rights, consent, and publication operations must use least privilege, auditability, retention controls, encryption, and recovery evidence appropriate to CSAP/SOC 2 design objectives. Real people/institutions remain excluded from tests/docs.
 
 ## Verification matrix
 
-- behavior changes are test-first: initial admission tests preceded production implementation; canonical-order repair was test-first; trusted-outcome opacity was captured by integration expectations before its production repair; source-hash missing-vs-malformed classification was captured by regression commit `cbecbcf9...` before production commit `2cb6e32f...`;
-- Rust owns the deterministic publication-admission logic;
-- no synthetic demo data is consumed by production;
-- public Rust API documentation is mandatory through `missing_docs = "deny"` and rustdoc warnings-as-errors;
-- CI requires formatting, Clippy with warnings denied, all-target tests, 100% line coverage, nonzero 100% branch coverage, and rustdoc;
-- coverage tooling is versioned (`cargo-llvm-cov` 0.9.0) and installed by a commit-pinned checksum-verifying action; branch instrumentation uses exact `nightly-2026-08-30`;
-- exact-head central security/SAST/review evidence remains mandatory for protected integration and is never replaced by repository-local green checks.
+- behavior changes are test-first;
+- Rust owns deterministic publication math/hash-sensitive core logic;
+- production consumes no synthetic demo data;
+- public Rust API documentation is enforced by `missing_docs = "deny"` plus rustdoc warnings-as-errors;
+- repository CI enforces formatting, Clippy with warnings denied, all-target tests, 100% line and nonzero 100% branch coverage, and rustdoc;
+- central exact-head Security/SAST/review evidence remains mandatory for protected integration and is never replaced by repository-local green checks;
+- every writer branch is re-fetched before a commit/ref mutation; restacks use ordinary merge ancestry without force-push or destructive rebases.
 
 ## Next bounded commercialization slice
 
-After the admission PR is protected-integrated, implement a native-web artifact projection from an approved immutable release, with recomputation/comparison of the canonical release SHA-256 identity, a canonical byte manifest, artifact SHA-256 computation, rights/accessibility validation receipts, byte-identical fixture reproduction, and explicit incompatibility output. Do not add cmi5 transformation to the native path; cmi5 remains a separate version-specific adapter.
+Keep downstream PR #7 byte-finalization aligned with this exact parent, then unblock the true shared-contract owner before implementing the native renderer. After byte finalization is protected-integrated, the next repository-local slice is durable append-only publication receipt persistence with explicit release identity, contract identity, artifact/build-manifest hashes, validation-receipt identities, and transaction/audit semantics. Do not introduce mutable UPSERT over immutable release or publication authority.
