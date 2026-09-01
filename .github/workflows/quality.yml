@@ -2,9 +2,9 @@ name: Learning Content Studio Quality
 
 on:
   pull_request:
-    branches: [develop, main]
+    branches: [develop, main, "agent/**"]
   push:
-    branches: [develop, main]
+    branches: [develop, main, "agent/**"]
 
 permissions:
   contents: read
@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - name: Validate bootstrap contract
+      - name: Validate product contract
         shell: python3 {0}
         run: |
           from pathlib import Path
@@ -32,26 +32,149 @@ jobs:
               Path("AGENTS.md"),
               Path("CLAUDE.md"),
               Path("CHANGELOG.md"),
+              Path("Cargo.toml"),
+              Path("src/lib.rs"),
+              Path("tests/publication_admission.rs"),
+              Path("tests/authority_ports.rs"),
+              Path("docs/PRD.md"),
+              Path("docs/TRD.md"),
               Path("docs/ARCHITECTURE.md"),
               Path("docs/adr/0001-authoring-release-boundary.md"),
               Path("docs/doctoring/STANDARD_TRACEABILITY.md"),
               Path("docs/PUBLISHING.md"),
+              Path("docs/product-technical-gap-baseline.md"),
           ]
           missing = [str(path) for path in required if not path.is_file()]
           if missing:
-              raise SystemExit(f"missing required bootstrap files: {missing}")
+              raise SystemExit(f"missing required product files: {missing}")
 
           architecture = Path("docs/ARCHITECTURE.md").read_text(encoding="utf-8")
-          required_terms = ("authoring", "immutable", "release", "accessibility", "publisher")
+          required_terms = (
+              "authoring",
+              "immutable",
+              "release",
+              "accessibility",
+              "publisher",
+              "Publication Admission",
+              "authority port",
+          )
           absent = [term for term in required_terms if term.lower() not in architecture.lower()]
           if absent:
-              raise SystemExit(f"LCMS architecture is missing release/accessibility terms: {absent}")
+              raise SystemExit(f"LCMS architecture is missing release/admission terms: {absent}")
 
           forbidden = ("TODO: replace", "TBD: replace", "PLACEHOLDER_REPLACE")
           for path in required:
               text = path.read_text(encoding="utf-8")
               for marker in forbidden:
                   if marker in text:
-                      raise SystemExit(f"unresolved bootstrap marker {marker!r} in {path}")
+                      raise SystemExit(f"unresolved product marker {marker!r} in {path}")
 
-          print("learning content studio bootstrap contract validation passed")
+          print("learning content studio product contract validation passed")
+      - name: Verify Rust formatting
+        run: cargo fmt --check
+      - name: Verify Rust lint contract
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Run publication kernel tests
+        run: cargo test --all-targets
+      - name: Install pinned coverage tool
+        uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
+        with:
+          tool: cargo-llvm-cov@0.9.0
+          fallback: none
+      - name: Install pinned branch-coverage toolchain
+        run: rustup toolchain install nightly-2026-08-30 --profile minimal --component llvm-tools-preview
+      - name: Enforce 100 percent production line and branch coverage
+        shell: python3 {0}
+        run: |
+          import json
+          import subprocess
+          from pathlib import Path
+
+          report_path = Path("target/llvm-cov/coverage.json")
+          report_path.parent.mkdir(parents=True, exist_ok=True)
+          subprocess.run(
+              [
+                  "cargo",
+                  "+nightly-2026-08-30",
+                  "llvm-cov",
+                  "--all-targets",
+                  "--branch",
+                  "--json",
+                  "--output-path",
+                  str(report_path),
+              ],
+              check=True,
+          )
+          with report_path.open(encoding="utf-8") as handle:
+              report = json.load(handle)
+          data = report.get("data") or []
+          if len(data) != 1:
+              raise SystemExit(f"expected one LLVM coverage data set, got {len(data)}")
+
+          repository_root = Path.cwd().resolve()
+          production = []
+          for file_record in data[0].get("files") or []:
+              filename = file_record.get("filename")
+              summary = file_record.get("summary") or {}
+              if not isinstance(filename, str):
+                  continue
+              path = Path(filename).resolve()
+              try:
+                  relative = path.relative_to(repository_root)
+              except ValueError:
+                  continue
+              if not relative.parts or relative.parts[0] != "src":
+                  continue
+              production.append((relative, summary))
+
+          if not production:
+              raise SystemExit("no production src/ coverage records found")
+
+          production_branch_count = 0
+          production_branch_covered = 0
+          for relative, summary in production:
+              lines = summary.get("lines") or {}
+              line_count = lines.get("count")
+              line_covered = lines.get("covered")
+              if (
+                  not isinstance(line_count, int)
+                  or not isinstance(line_covered, int)
+                  or line_count <= 0
+              ):
+                  raise SystemExit(f"production line evidence malformed for {relative}: {lines}")
+              if line_covered != line_count:
+                  raise SystemExit(
+                      f"production line coverage below 100% for {relative}: "
+                      f"{line_covered}/{line_count}"
+                  )
+
+              branches = summary.get("branches") or {}
+              branch_count = branches.get("count")
+              branch_covered = branches.get("covered")
+              if not isinstance(branch_count, int) or not isinstance(branch_covered, int):
+                  raise SystemExit(
+                      f"production branch evidence malformed for {relative}: {branches}"
+                  )
+              production_branch_count += branch_count
+              production_branch_covered += branch_covered
+              if branch_covered != branch_count:
+                  raise SystemExit(
+                      f"production branch coverage below 100% for {relative}: "
+                      f"{branch_covered}/{branch_count}"
+                  )
+
+          if production_branch_count <= 0:
+              raise SystemExit("production branch coverage has zero measurable branches")
+          if production_branch_covered != production_branch_count:
+              raise SystemExit(
+                  "production branch coverage below 100%: "
+                  f"{production_branch_covered}/{production_branch_count}"
+              )
+          print(
+              "production src/ line coverage 100%; production branch coverage "
+              f"{production_branch_covered}/{production_branch_count} (100%)"
+          )
+      - name: Verify public API documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --no-deps
