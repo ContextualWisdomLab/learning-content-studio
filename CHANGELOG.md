@@ -21,3 +21,4 @@
 - Trusted publication outcomes and their authority metadata are now externally read-only and can only be constructed by the validated admission path, preventing downstream callers from bypassing approval, hash, contract, or blocker checks.
 - Empty or whitespace-only `source_hash` is now reported as `EmptyRequiredField("source_hash")`; non-empty malformed SHA-256 identities remain `InvalidSourceHash`, preserving a stable machine-readable distinction between missing and malformed publisher input.
 - SHA-256 byte identity is implemented with pinned RustCrypto `sha2` 0.11.0 rather than handwritten cryptography; protected dependency/security evidence remains mandatory before integration.
+- Native-web publication receipts now canonicalize `source_hash` to the lowercase SHA-256 identity recomputed from exact release bytes, while admission metadata retains the caller's validated spelling; equivalent digest casing can no longer change final receipt evidence.
