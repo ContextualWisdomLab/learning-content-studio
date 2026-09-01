@@ -17,6 +17,7 @@ Evidence established during the active commercialization iteration:
 - parent repository quality remains queued on `ubuntu-latest`; this implementation pins `ubuntu-24.04`, and an earlier implementation head completed formatting, Clippy, tests, and rustdoc on an assigned Ubuntu 24.04 runner;
 - Devin review identified a canonical-serialization ordering defect and missing coverage gate. The ordering regression was committed before its production repair and the quality lane now enforces checksum-verified 100% line and branch coverage;
 - a later Devin review found that public `PublicationOutcome` variants and public `PublicationMetadata` fields allowed downstream callers to manufacture apparently trusted compatible/incompatible results without running admission validation. Regression expectations were committed first at `96d97f4dc22fcff30e6a887256711b57f1fa9db1`; production was repaired at `26f530ca9763b92703b80aa2049d04fe9d74e1c9`; the trusted outcome and metadata are now externally read-only and created only by `evaluate_publication`;
+- current-head review then found that an empty `source_hash` was being collapsed into `InvalidSourceHash`, making missing input indistinguishable from a non-empty malformed digest. The regression was committed first at `cbecbcf98a7426051c343c956346906221d4df1e`; production was repaired at `2cb6e32f548f960349902e2a0d18a2c6e78854af` by applying the required-field check before SHA-256 syntax validation;
 - central required-workflow rules on this repository target only `~DEFAULT_BRANCH`, so stacked PR #6 does not receive injected OpenCode/Noema/Security workflows. The central `.github` control plane documents a rotating `org-queue-sweep` review path for stacked work; no local approval substitute is accepted.
 
 ## Current feature specification
@@ -38,7 +39,8 @@ Aggregate/invariants:
 
 - `PublicationRequest` is the transaction boundary for one immutable release and one selected target;
 - release approval is mandatory before admission;
-- `source_hash` must be an explicit SHA-256-shaped identity; admission validates syntax only because it does not own release bytes, and the later byte-producing publisher must recompute/compare the digest before emission;
+- `source_hash` is a required non-empty identity field and must then satisfy the explicit SHA-256 syntax contract; admission validates syntax only because it does not own release bytes, and the later byte-producing publisher must recompute/compare the digest before emission;
+- missing/whitespace-only `source_hash` returns `EmptyRequiredField("source_hash")`, while a non-empty malformed digest returns `InvalidSourceHash`;
 - `native_web_publisher` admits only `native_cwl_xapi_2_0/v1`;
 - `cmi5_quartz_publisher` admits only `cmi5_quartz_xapi_1_0_3/v1`;
 - cross-target contract selection fails closed;
@@ -67,6 +69,7 @@ The publisher boundary is an anti-corruption layer: cmi5/xAPI 1.0.3, native xAPI
 | No executable release/publisher boundary | Learning Content Studio | PR #1 explicitly states no executable publisher exists | **In progress:** Rust Publication Admission kernel and tests in PR #6 | Exact-head fmt/clippy/test/rustdoc/coverage plus independent review |
 | Canonical JSON depended on caller blocker order | Learning Content Studio | Devin PR #6 review showed equivalent blocker evidence could serialize differently | **Repaired test-first** | Exact-head tests and independent reviewer confirmation |
 | Trusted admission result could be forged by downstream caller | Learning Content Studio | Devin PR #6 review showed public outcome variants/public metadata fields bypassed approval/hash/contract checks | **Repaired test-first:** regression expectations `96d97f4d...`; production `26f530ca...`; outcomes/metadata are opaque with read-only accessors | Exact-head tests, rustdoc and independent reviewer confirmation |
+| Missing source identity was misclassified as malformed | Learning Content Studio | Devin PR #6 review showed empty `source_hash` returned `InvalidSourceHash` | **Repaired test-first:** regression `cbecbcf9...`; production `2cb6e32f...`; missing vs malformed machine-readable errors are distinct | Exact-head tests and reviewer confirmation |
 | 100% coverage mandate was unenforced | Learning Content Studio | Devin PR #6 review found tests ran without line/branch measurement | **Repaired:** pinned `cargo-llvm-cov` 0.9.0 + exact nightly branch instrumentation; line and branch evidence fail closed below 100% | Exact-head coverage workflow succeeds with nonzero branch count |
 | Repository quality lane can wait indefinitely on `ubuntu-latest` | Learning Content Studio | PR #1 quality run remained queued while central jobs obtained `ubuntu-24.04` runners | **Repaired in PR #6:** pin repository quality to `ubuntu-24.04` | Latest exact head obtains a runner and executes expanded coverage lane |
 | Dependency Review cannot obtain evidence | GitHub repository security configuration / organization control plane | central Security Scan parent exact-head probe returned HTTP 403 | **Blocked, fail-closed:** do not bypass or convert to green skip | Enable/repair dependency-graph capability or token entitlement, then rerun exact-head Security Scan after retargeting to protected default |
@@ -88,7 +91,7 @@ The current kernel processes identifiers and compatibility evidence only; it doe
 
 ## Verification matrix
 
-- behavior changes are test-first: initial admission tests preceded production implementation; canonical-order repair was test-first; trusted-outcome opacity was captured by integration expectations before its production repair;
+- behavior changes are test-first: initial admission tests preceded production implementation; canonical-order repair was test-first; trusted-outcome opacity was captured by integration expectations before its production repair; source-hash missing-vs-malformed classification was captured by regression commit `cbecbcf9...` before production commit `2cb6e32f...`;
 - Rust owns the deterministic publication-admission logic;
 - no synthetic demo data is consumed by production;
 - public Rust API documentation is mandatory through `missing_docs = "deny"` and rustdoc warnings-as-errors;
