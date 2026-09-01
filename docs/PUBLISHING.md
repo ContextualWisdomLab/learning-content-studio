@@ -1,135 +1,65 @@
 # Publishing contract
 
-Authoring sources are not delivery packages. Publication is an explicit, deterministic transformation from an approved immutable content release.
+Authoring sources are not delivery packages. Publication is an explicit deterministic projection from one approved immutable content release through one versioned publisher target contract.
+
+## Authority before transformation
+
+Caller intent is not publication authority. `PublicationRequest` selects only a `content_release_id` and `PublisherTarget`. Publication Admission obtains all trust-bearing facts through explicit authority ports:
+
+- `ReleaseAuthorityPort` returns immutable release identity, SHA-256 source identity, locale, approval state, and approval-evidence identity;
+- `TargetCompatibilityPort` returns the selected target, target-owned contract/version/standard, target-validation evidence identity, and semantic blockers.
+
+A production authority port is an anti-corruption adapter to the real owning bounded context. It must not reconstruct evidence from request booleans, request blocker lists, synthetic demo state, or mutable authoring rows. `evaluate_publication` cross-binds both evidence objects to caller intent before minting an opaque outcome.
 
 ## Canonical input and determinism
 
-The only valid publisher input is an approved immutable `content_release` plus an explicit publisher contract/version. Mutable authoring branches, review drafts, local wall-clock time, machine locale, environment ordering, and network-fetched content are not publisher inputs.
+Mutable authoring branches, review drafts, local wall-clock time, machine locale, environment ordering, and network-fetched content are not publisher inputs.
 
-Deterministic normalization rules:
+Deterministic normalization direction:
 
 - text is UTF-8 with Unicode NFC normalization and LF line endings;
-- structured map/object keys are serialized in deterministic lexical order;
-- files are ordered by normalized UTF-8 path;
-- locale is taken from the immutable release manifest and never inferred from the build host;
-- timestamps come from immutable release metadata and are normalized to UTC; publication never injects the current time into hashed payload bytes;
-- asset identifiers are derived from the content release identity plus normalized asset path/content identity, not from random or machine-local IDs;
-- `source_hash` covers the canonical immutable release manifest and release-owned content bytes, not mutable authoring sources;
-- admission may preserve the caller's validated upper/lowercase hexadecimal spelling, but byte-finalized publication receipts use the lowercase SHA-256 identity recomputed from exact release bytes;
-- `artifact_hash` covers the final emitted artifact bytes exactly;
-- `build_manifest_hash` covers the exact build-manifest bytes used to describe that artifact;
-- validation receipt identities are stable external evidence references and are serialized in deterministic lexical order;
-- a publisher contract version change is explicit even when the target standard revision does not change.
+- structured keys serialize in deterministic lexical order;
+- files order by normalized UTF-8 path;
+- locale comes from immutable release authority and is never inferred from the build host;
+- timestamps come from immutable release metadata and never inject wall-clock time into hashed payload bytes;
+- asset identifiers derive from release identity plus normalized path/content identity, not random/machine-local IDs;
+- `source_hash` covers canonical immutable release manifest/content bytes and is supplied by release authority at admission, then recomputed by the byte-owning finalizer;
+- `artifact_hash` covers final emitted artifact bytes exactly;
+- publisher contract/version/standard come from the target-validation authority;
+- a contract version change is explicit even when the target standard revision is unchanged.
 
-Identical release bytes, publisher contract ID/version, target parameters, rendered artifact bytes, build-manifest bytes and validation-receipt identities must produce identical evidence bytes and hashes or an identical incompatibility payload, including when equivalent admitted SHA-256 values differ only in hexadecimal case.
-
-## Initial publisher targets
-
-- `native_web_publisher`
-- `cmi5_quartz_publisher`
-- `scorm_1_2_publisher`
-- `scorm_2004_publisher`
-- `common_cartridge_publisher`
-- `qti_3_0_reference_publisher`
-- `static_html_publisher`
-
-The QTI 3.0 publisher is reference-only in this baseline: it emits/binds approved QTI assessment references or metadata and does not claim complete course-to-QTI package conversion.
-
-## Executable Publication Admission boundary
-
-`evaluate_publication` gates one approved immutable release before a target adapter is allowed to emit anything. It requires exact release identity, SHA-256 source identity, explicit target, publisher contract/version, target-standard revision and locale. A compatible result means only that target transformation may proceed; it is not an artifact, certification or interoperability-conformance claim.
-
-The currently executable target/contract mapping is one-to-one:
+## Executable target boundaries
 
 | Publisher target | Required publisher contract | Runtime protocol boundary |
 | --- | --- | --- |
 | `native_web_publisher` | `native_cwl_xapi_2_0/v1` | native CWL / xAPI 2.0 |
 | `cmi5_quartz_publisher` | `cmi5_quartz_xapi_1_0_3/v1` | cmi5 Quartz / xAPI 1.0.3 |
 
-Selecting the other target's contract is a hard `ContractTargetMismatch`; no fallback, compatibility alias or cross-conversion is permitted. The other listed publisher targets remain documented future adapters and are not admitted by the current kernel.
+Target authority evidence naming the other target or another target's contract fails closed. No compatibility alias, fallback, or silent cross-conversion is permitted.
 
-## Executable native-web byte-finalization boundary
+Future adapters remain `scorm_1_2_publisher`, `scorm_2004_publisher`, `common_cartridge_publisher`, `qti_3_0_reference_publisher`, and `static_html_publisher`. QTI remains reference-only in this baseline unless a separate complete package contract and conformance evidence are established.
 
-`finalize_native_web_publication` is the downstream byte-level trust boundary for `native_cwl_xapi_2_0/v1`. It accepts only a trusted compatible `PublicationOutcome`, the exact canonical immutable release bytes, already-emitted native artifact bytes, exact build-manifest bytes, and validation-receipt identities.
+## Machine-readable admission evidence
 
-Before a publication receipt can exist it must:
-
-1. reject an incompatible admission;
-2. reject any trusted admission that belongs to the cmi5 contract;
-3. recompute SHA-256 over the exact canonical release bytes and compare it with admitted `source_hash`;
-4. reject zero-byte artifact or build-manifest payloads;
-5. reject empty validation-receipt identities, canonically sort them and reject duplicates;
-6. compute SHA-256 over the exact final artifact bytes and exact build-manifest bytes;
-7. normalize receipt `source_hash` to the lowercase identity recomputed from exact release bytes while retaining caller spelling only in the admission outcome;
-8. return an opaque `NativeWebPublicationReceipt` whose fields cannot be forged through a public constructor.
-
-The admitted source digest may contain upper- or lowercase hexadecimal. Digest comparison is case-insensitive because hexadecimal case is not semantic. Admission remains auditable and preserves its exact validated input, while final publication evidence is canonical and independent of input spelling.
-
-This boundary **does not render or transform learning content**. It records trustworthy byte provenance after a native renderer has produced bytes. Therefore the existence of a publication receipt is not yet evidence that the repository contains a complete buyer-facing native-web generator or released xAPI 2.0 mapping implementation.
-
-## Machine-readable result contract
-
-Every publication outcome uses the same target-revision field name, `standard_revision`, so consumers do not need outcome-specific field mapping.
-
-A successful native-web publication receipt records:
+A successful admission outcome preserves at least:
 
 ```text
-publication_status = published
+publication_status
 content_release_id
-source_hash
+release_approval_evidence_id
 publisher_contract_id
 publisher_version
 standard_revision
+target_validation_evidence_id
+source_hash
 locale_code
-artifact_hash
-build_manifest_hash
-validation_receipt_ids
+blocking_features
 ```
 
-`NativeWebPublicationReceipt::canonical_json()` uses a fixed top-level field order and lexically ordered validation-receipt IDs. Receipt `source_hash`, `artifact_hash` and `build_manifest_hash` are recomputed from exact bytes at finalization; callers cannot supply those trusted publication-evidence values directly.
+Blocking features are canonicalized by `feature_code`, then `source_component_reference`, then `reason_code`; exact duplicate triples are invalid. A compatible outcome is possible only when the target authority returns zero blockers. An incompatible outcome carries one or more target-authority blockers. Callers cannot omit blockers through `PublicationRequest` because no such request field exists.
 
-An incompatible publication returns a deterministic payload with this minimum shape:
+Admission proves validation against the supplied authority ports, not artifact bytes or interoperability conformance. The downstream native finalizer recomputes exact release SHA-256 and exact artifact/build-manifest SHA-256 before creating byte-bound publication evidence.
 
-```json
-{
-  "publication_status": "incompatible",
-  "content_release_id": "release-reference",
-  "publisher_contract_id": "publisher-contract-reference",
-  "publisher_version": "1.0.0",
-  "standard_revision": "target-revision",
-  "source_hash": "sha256:...",
-  "locale_code": "en-US",
-  "blocking_features": [
-    {
-      "feature_code": "unsupported_feature",
-      "source_component_reference": "component-reference",
-      "reason_code": "semantic_loss_required"
-    }
-  ]
-}
-```
+## xAPI-version-specific contracts
 
-Blocking features are sorted deterministically by `feature_code`, then `source_component_reference`, then `reason_code`. Duplicate entries with all three keys equal are invalid rather than preserving input order.
-
-## xAPI-version-specific publisher contracts
-
-The native and cmi5 paths are separate contracts and may not share validation or silently cross-convert protocol behavior.
-
-### `cmi5_quartz_xapi_1_0_3/v1`
-
-- target: cmi5 Quartz, 1st Edition;
-- runtime evidence mapping: xAPI 1.0.3 compatibility as required by Quartz;
-- transformation: only Quartz-defined course/AU metadata and launch/runtime mappings are emitted;
-- rejection: any feature requiring xAPI 2.0-only semantics, an unsupported cmi5 runtime behavior, or silent semantic loss returns `incompatible`;
-- validation: Quartz/cmi5 and xAPI 1.0.3 compatibility rules only.
-
-### `native_cwl_xapi_2_0/v1`
-
-- target: CWL native learning activity;
-- runtime evidence mapping: xAPI 2.0 through a released learning-interoperability contract; until that shared contract is released, no complete xAPI 2.0 conformance claim is made;
-- transformation: native release semantics map only through the xAPI 2.0 contract;
-- byte evidence: final emitted bytes must pass `finalize_native_web_publication` before a trusted native publication receipt exists;
-- rejection: no fallback to cmi5/xAPI 1.0.3 semantics is permitted;
-- validation: xAPI 2.0/native contract rules only.
-
-A publisher must never silently discard semantics. Unsupported source features produce the machine-readable incompatible result above. Published artifacts preserve provenance and validation evidence.
+`cmi5_quartz_xapi_1_0_3/v1` remains a cmi5 Quartz / xAPI 1.0.3 boundary. `native_cwl_xapi_2_0/v1` remains a native xAPI 2.0 boundary and must consume a released shared contract from `ContextualWisdomLab/learning-interoperability-contracts` before any renderer claims conformance. Unsupported semantics produce deterministic incompatibility evidence rather than silent semantic loss.

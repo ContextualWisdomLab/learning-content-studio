@@ -1,44 +1,39 @@
 # Architecture
 
-The Learning Content Studio is the LCMS and authoring authority. It owns mutable authoring projects, reusable learning objects, revisions, accessibility variants, localization, rights metadata, review/approval state, immutable content releases, target publication decisions and publication provenance receipts.
-
-It does not own enrollment, learner completion, xAPI statement truth, psychometric response data, or commercial payment truth.
+Learning Content Studio is the ContextualWisdomLab LCMS and authoring authority. It owns mutable authoring projects, reusable learning objects/assets, revisions, accessibility/localization/rights evidence, review/approval state, immutable content releases, publication admission, and target publication provenance. Enrollment, learner completion, xAPI statement truth, psychometric response/scoring truth, and payment truth remain outside this bounded context.
 
 ## Authoring and publication pipeline
 
-Mutable authoring source -> review -> accessibility validation -> rights validation -> approval -> immutable content release -> Publication Admission -> target-specific renderer -> byte-level publication finalization -> Artifact Storage / Delivery.
+Mutable authoring source -> review -> accessibility/rights validation -> approval -> immutable content release -> Publication Admission -> target renderer -> byte finalization -> Artifact Storage / Delivery.
 
 ## Domain-driven design
 
 ### Core subdomain: Content Authoring & Release
 
-The core bounded context owns the lifecycle from mutable authoring work through immutable approval. Its future aggregate roots are `ContentProject` for mutable editorial transactions and `ContentRelease` for immutable publication authority. A release never mutates after approval; corrections create a successor release and preserve lineage.
+Future aggregate roots are `ContentProject` for mutable editorial transactions and append-only `ContentRelease` for immutable publication authority. Corrections create successor releases and preserve lineage; they do not mutate approved authority.
 
 ### Supporting subdomain: Publication Admission & Projection
 
-`src/lib.rs` implements the executable trust boundaries that precede durable storage or delivery.
+Publication Admission separates caller intent from authority. `PublicationRequest` contains only `content_release_id` and `PublisherTarget`. It cannot carry approval, source hash, locale, target contract metadata, or blocking features.
 
-`PublicationRequest` is a minimal transaction boundary for one approved immutable release and one publisher target. `evaluate_publication` enforces release approval, SHA-256 source identity syntax, target-specific contract ownership, required identity fields, canonical blocker ordering, and duplicate-blocker rejection. `PublicationOutcome` is opaque outside the crate and can only be minted by that validated path.
+Two explicit security-sensitive authority ports are anti-corruption boundaries:
 
-Compatible admission is permission to proceed to a target adapter, not evidence that an artifact was built or certified. Incompatible admission is deterministic machine-readable evidence that publication would lose required semantics.
+- `ReleaseAuthorityPort` supplies `ReleaseAuthorityEvidence` from the immutable-release authority, including release identity, source SHA-256, locale, approval state, and stable approval-evidence identity;
+- `TargetCompatibilityPort` supplies `TargetCompatibilityEvidence` from the target validator. Each record includes a `CompatibilityReleaseIdentity` with the exact immutable `content_release_id` and `source_hash` validated, plus target, contract/version/standard, validation-evidence identity, and semantic blockers.
 
-`finalize_native_web_publication` is the next transaction boundary after a native renderer has produced bytes. It accepts only a trusted compatible `native_cwl_xapi_2_0/v1` outcome, recomputes SHA-256 from the exact canonical immutable release bytes, rejects source mismatch, hashes the exact emitted artifact and build manifest, canonicalizes validation-receipt identities, and returns an opaque `NativeWebPublicationReceipt`. The receipt is byte-provenance evidence; it is not a renderer, xAPI conformance certificate, release database row, or storage record.
+`evaluate_publication` cross-binds returned release evidence to caller release intent and target evidence to both the requested target and the exact immutable release identity/hash. Cached compatibility evidence from a different release or different source bytes fails closed before contract or blocker admission. The service then validates required identities and contract ownership, canonically sorts/rejects duplicate blockers, and creates the opaque `PublicationOutcome`. A port implementation that derives evidence from mutable request fields or synthetic/demo state violates the architecture contract.
 
-The publisher boundary is an anti-corruption layer. Target protocols and packaging formats do not become canonical authoring entities. In particular:
+Compatible admission permits the next target-specific step; it is not artifact, certification, or interoperability-conformance evidence. Downstream native byte finalization recomputes release/artifact/manifest hashes from exact bytes.
 
-- `native_web_publisher` owns `native_cwl_xapi_2_0/v1` validation/finalization and must consume the released shared xAPI 2.0 contract before a full renderer may claim conformance;
-- `cmi5_quartz_publisher` owns `cmi5_quartz_xapi_1_0_3/v1` validation and remains a separate adapter;
-- cross-contract fallback is rejected;
-- SCORM, Common Cartridge, QTI 3.0 reference publication and static HTML remain later target adapters;
-- shared interoperability schemas stay in `ContextualWisdomLab/learning-interoperability-contracts` and enter this context only through versioned released contracts.
+The publisher boundary remains an ACL: xAPI/cmi5/SCORM/Common Cartridge/QTI details may not leak into canonical authoring entities. Shared schemas are consumed from released `ContextualWisdomLab/learning-interoperability-contracts` contracts, never copied locally.
 
 ### Supporting subdomain: Rights & Accessibility Evidence
 
-Rights, accessibility and localization evidence belong to release gating and are referenced by immutable identity. Target adapters consume the approved evidence but do not reinterpret or silently waive it. Publication finalization records stable validation-receipt IDs but does not independently validate or rewrite the external receipt bodies.
+Rights, accessibility, and localization evidence gate immutable release approval and target compatibility. Target adapters reference approved evidence identities; they do not silently reinterpret or waive it.
 
-### Generic subdomains
+### Generic subdomain: Artifact Storage / Delivery
 
-Artifact storage, CDN delivery, registry publication, telemetry and deployment are generic capabilities behind explicit ports. They may cache or project immutable release/publication facts but must never become authoring truth.
+Object storage, CDN, registry, telemetry, deployment, and recovery remain generic capabilities behind explicit ports. They may project immutable facts but never become authoring authority.
 
 ## Context map
 
@@ -48,41 +43,35 @@ Authoring Surface (Inkspan ACL)
           v
 Content Authoring & Release ----> Rights & Accessibility Evidence
           |
-          | approved immutable content_release
+          | immutable release authority
           v
-Publication Admission
-          |
-          +----> Native Web Renderer (released xAPI 2.0 contract)
-          |              |
-          |              v
-          |       Native Web Finalization
-          |              |
-          +----> cmi5 Quartz adapter (xAPI 1.0.3 contract)
-          +----> later versioned compatibility adapters
-                         |
-                         v
-                Artifact Storage / Delivery
+ReleaseAuthorityPort -----> Publication Admission <----- TargetCompatibilityPort
+                                  |                              |
+                                  |                 exact release id + source hash
+                                  |                              |
+                                  +----> Native Web Renderer -> Byte Finalization
+                                  +----> cmi5 Quartz adapter
+                                  +----> later versioned adapters
+                                                   |
+                                                   v
+                                          Artifact Storage / Delivery
 ```
 
-Downstream LMS/LRS/assessment systems consume released artifacts/contracts. They do not write Studio authoring tables directly. Shared learning-interoperability contracts are consumed through released schemas rather than copied into this repository.
+Downstream LMS/LRS/assessment systems consume released projections/contracts and never write Studio authoring tables directly.
 
-## Aggregates, entities, value objects and services
+## Current domain objects and services
 
-Current executable value/domain objects:
-
-- `PublicationRequest` — admission command/value object for one release-target decision;
-- `PublicationMetadata` — immutable validated release/contract authority;
+- `PublicationRequest` — caller intent only;
+- `ReleaseAuthorityEvidence` — immutable-release/approval evidence value object;
+- `CompatibilityReleaseIdentity` — exact immutable release and source-hash identity validated by the target authority;
+- `TargetCompatibilityEvidence` — release-bound target-validation evidence value object;
 - `BlockingFeature` — semantic incompatibility evidence;
-- `PublicationOutcome` — trusted admission result;
-- `NativeWebPublicationReceipt` — immutable exact-byte publication evidence.
+- `PublicationMetadata` — validated authority traceability;
+- `PublicationOutcome` — opaque admission result;
+- `evaluate_publication` — authority-backed admission domain service.
 
-Current domain services:
-
-- `evaluate_publication` — Publication Admission service;
-- `finalize_native_web_publication` — Native-Web Publication Finalization service.
-
-Future aggregate roots/entities remain `ContentProject`, `ContentRelease`, release components/assets/approvals and durable publication receipts. No repository abstraction is introduced until persistence exists.
+Future durable domain events (`content_release_approved`, `publication_admitted`, `publication_rejected`, `native_publication_finalized`) wait for persistence transaction semantics.
 
 ## Persistence direction
 
-No database is introduced by the current kernels. When persistence is implemented, authoritative relational objects use two-or-more-word `snake_case` names and 3NF. Mutable authoring transactions and immutable release/publication receipts use separate transaction boundaries. Immutable release and publication receipt rows are append-only; item-level UPSERT is reserved for mutable authoring/index records with explicit idempotency keys and tests. Read replicas/materialized views may be added only from measured contention or read-load evidence rather than by denormalizing authoritative facts.
+No database is introduced by this slice. Future authoritative relational objects use two-or-more-word `snake_case` names and 3NF. Mutable authoring transactions and immutable release/publication transactions stay separate. `content_release`, `release_component`, `release_asset`, `release_approval`, and `publication_receipt` are append-only where they represent immutable authority. Item-level UPSERT is reserved for explicitly mutable indexes with tested idempotency keys. Read/write separation or materialized views require measured contention/load evidence.

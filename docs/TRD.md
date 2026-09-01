@@ -1,96 +1,70 @@
-# Technical requirements — Publication Admission and Native-Web Finalization
+# Technical requirements — Publication Admission
 
 ## Scope
 
-This TRD covers the first two executable Learning Content Studio publication boundaries. Publication Admission validates one approved immutable release against one target-specific interoperability contract and returns a deterministic compatible/incompatible result. Native-Web Finalization consumes only a trusted compatible native admission plus the exact canonical release bytes and already-emitted artifact/build-manifest bytes; it recomputes byte identities and returns a deterministic publication receipt. Target rendering, persistence, network services and UI remain outside this slice.
+This TRD covers the first executable Learning Content Studio trust boundary. It evaluates caller intent for one immutable release/target only after obtaining approval/release evidence from the release authority and semantic compatibility evidence from the target-validation authority. Package generation, persistence, network services, and UI remain outside this slice.
 
 ## Runtime and API
 
-The implementation is a Rust library crate in `src/lib.rs` with `unsafe_code = "forbid"` and `missing_docs = "deny"`. SHA-256 uses the pinned RustCrypto `sha2 = 0.11.0` implementation rather than a handwritten cryptographic primitive.
+The implementation is a dependency-free Rust library crate in `src/lib.rs` with `unsafe_code = "forbid"` and `missing_docs = "deny"`.
 
-Primary APIs:
+Primary API:
 
 ```text
-evaluate_publication(PublicationRequest)
-  -> Result<PublicationOutcome, AdmissionError>
-
-finalize_native_web_publication(
-  PublicationOutcome,
-  canonical_release_bytes,
-  artifact_bytes,
-  build_manifest_bytes,
-  validation_receipt_ids
-) -> Result<NativeWebPublicationReceipt, NativeWebPublicationError>
+evaluate_publication(
+    PublicationRequest,
+    &dyn ReleaseAuthorityPort,
+    &dyn TargetCompatibilityPort,
+) -> Result<PublicationOutcome, AdmissionError>
 ```
 
-`PublicationRequest` contains exact immutable release identity, caller-supplied `sha256:` source identity, publisher target, target-owned contract ID, publisher version, target standard revision, locale, approval state and zero or more blocking features. Publication Admission validates SHA-256 syntax but cannot prove digest/content equality because it does not own release bytes.
+`PublicationRequest` contains only caller intent: `content_release_id` and `PublisherTarget`. It has no caller-controlled approval boolean, source hash, locale, publisher contract/version/standard, or blocker vector.
 
-A successful `PublicationOutcome` is a trusted result of this validation boundary. Its fields and `PublicationMetadata` fields are private outside the crate; callers receive read-only accessors. Downstream code cannot construct or mutate a value that impersonates a validated compatible/incompatible result. Admission preserves the exact validated source-hash spelling supplied by its caller for auditability.
+`ReleaseAuthorityPort` owns immutable-release lookup. Its `ReleaseAuthorityEvidence` supplies release identity, SHA-256 source identity, locale, approval state, and stable approval-evidence identity. `TargetCompatibilityPort` owns target validation. Its `TargetCompatibilityEvidence` supplies a `CompatibilityReleaseIdentity` containing the exact immutable `content_release_id` and `source_hash` validated, plus target, contract/version/standard, stable validation-evidence identity, and zero or more blockers. Production adapters are security-sensitive ACLs and must derive evidence from authoritative stores/services, not request fields or synthetic/demo state.
 
-`finalize_native_web_publication` is the first byte-owning trust boundary. It requires the exact canonical immutable release bytes, final emitted artifact bytes and build-manifest bytes. It recomputes SHA-256 over each byte set, compares the source digest to the admitted identity, and returns an opaque `NativeWebPublicationReceipt` carrying immutable authority metadata, `artifact_hash`, `build_manifest_hash` and canonically ordered validation receipt IDs. Receipt metadata records the recomputed lowercase `sha256:` source identity so equivalent upper/lowercase admission spellings cannot create different publication evidence. It does not render content and therefore does not claim that a complete native-web generator exists.
+## Validation order
 
-## Admission validation order
+1. reject an empty requested release identity;
+2. require release-authority evidence and reject a returned release identity that does not exactly match the request;
+3. reject release authority evidence that is not approved;
+4. validate authority-owned source hash, locale, and approval-evidence identity;
+5. validate SHA-256 syntax (byte equality is verified later by the byte-owning finalizer);
+6. require target-compatibility evidence and reject evidence for another target;
+7. reject target compatibility evidence whose `content_release_id` does not exactly match release-authority evidence;
+8. reject target compatibility evidence whose `source_hash` does not exactly match release-authority evidence, so stale cached validation cannot authorize different immutable bytes;
+9. validate target-owned contract/version/standard/validation-evidence identities;
+10. reject a contract not owned by the requested target;
+11. validate blocker identities, sort by `feature_code`, `source_component_reference`, `reason_code`, and reject exact duplicates;
+12. mint an opaque compatible outcome only when the authority-supplied blocker set is empty; otherwise mint an incompatible outcome.
 
-1. reject an unapproved release;
-2. reject empty required identities, including `source_hash`;
-3. reject a malformed SHA-256 source identity;
-4. reject a publisher contract that belongs to another target;
-5. reject incomplete blocking-feature identities;
-6. sort blockers by `feature_code`, `source_component_reference`, `reason_code`;
-7. reject exact duplicate blocker triples;
-8. return compatible when no blockers remain, otherwise incompatible.
+No mutable authoring state, caller approval claim, caller blocker omission, wall clock, environment locale, network-fetched content, random ID, or process ordering participates in the decision.
 
-## Native-web finalization order
+## Deterministic result and traceability
 
-1. reject an incompatible trusted admission;
-2. reject any trusted admission whose exact contract is not `native_cwl_xapi_2_0/v1`;
-3. recompute SHA-256 from the exact canonical immutable release bytes and compare the digest to admitted `source_hash`;
-4. reject a zero-byte emitted artifact;
-5. reject a zero-byte build manifest;
-6. reject empty validation-receipt identities;
-7. sort validation-receipt identities lexically and reject exact duplicates;
-8. compute exact SHA-256 identities for artifact and build-manifest bytes;
-9. construct receipt metadata with the canonical lowercase recomputed source identity while retaining the original validated spelling in the admission outcome;
-10. return an opaque deterministic native-web publication receipt.
+`PublicationMetadata` records release and target authority evidence identities alongside release/contract/version/standard/source/locale authority. Its fields and `PublicationOutcome` fields are private. Read-only accessors preserve traceability while preventing downstream mutation.
 
-Hexadecimal case is non-semantic for a valid admitted digest. Finalization compares the recomputed digest case-insensitively, admission preserves caller spelling, and publication receipt evidence uses the recomputed lowercase identity. No mutable authoring source, wall clock, environment locale, network fetch, random identifier or process ordering enters either decision.
-
-## Deterministic evidence
-
-`PublicationOutcome::canonical_json()` emits fixed top-level field order from a validation-only outcome whose blockers were canonically sorted before construction. Compatible outcomes cannot carry blockers; incompatible outcomes always carry at least one blocker.
-
-`NativeWebPublicationReceipt::canonical_json()` emits fixed field order and canonically sorted validation receipt IDs. `artifact_hash` covers the final emitted artifact bytes exactly. `build_manifest_hash` covers the exact build-manifest bytes. Receipt `source_hash` is the lowercase SHA-256 identity recomputed from exact release bytes, so semantically identical uppercase/lowercase admitted hashes produce byte-identical receipt evidence.
+`PublicationOutcome::canonical_json()` emits fixed field order and already-canonical blocker order. Admission evidence does not prove release-byte equality; the downstream native byte finalizer recomputes SHA-256 over exact immutable release bytes before minting artifact provenance.
 
 ## Failure model
 
-Both boundaries fail closed. Cross-target contract selection, missing approval, malformed or missing source identity, missing required fields and duplicate blocker identities return typed admission errors. Native finalization additionally rejects incompatible outcomes, cmi5 outcomes, source-byte mismatch, empty artifact/manifest bytes, and invalid validation-receipt identities. Neither trusted outcome nor publication receipt has a public constructor.
+Validation fails closed with typed errors for unavailable release/compatibility evidence, release/target authority identity mismatch, compatibility evidence bound to another release or source hash, unapproved release, malformed source identity, cross-target contract, missing authority fields, and duplicate blockers. A caller cannot manufacture compatibility by setting `approved=true`, supplying an empty blocker vector, or replaying cached target evidence for another immutable release.
 
-## Test and coverage contract
+## Test-first evidence
 
-`tests/publication_admission.rs` was committed before the first production kernel and subsequent behavior fixes remain test-first. `tests/native_web_publication.rs` was committed at `2534b18c3422e6f353cc74c3443f8834d4f58cd2` before the native finalization implementation. The digest-canonicalization regression identified by live review was committed first at `f0ac99ce16762638e76a5983892c5785db4f36b0`; production was repaired at `084aa22868f32157d13e63c99c9defbe6e9ac34a`. The suite covers:
+`tests/authority_ports.rs` was committed in RED state before the authority-port production repair. It requires authority-owned approval/blocker truth, release/target cross-binding, and fail-closed unavailable evidence.
 
-- unapproved release rejection;
-- native/cmi5 cross-target contract rejection;
-- missing-prefix, wrong-length, non-hex and missing source-hash behavior;
-- order-independent incompatibility output and duplicate blocker rejection;
-- compatible authority preservation and JSON escaping;
-- byte-identical native-web receipt reproduction independent of caller receipt-ID order;
-- exact source-byte mismatch rejection;
-- equivalent upper/lowercase admitted digest spellings producing identical canonical receipt evidence while admission preserves caller spelling;
-- incompatible admission and cmi5 contract rejection at native finalization;
-- empty emitted artifact/build-manifest rejection;
-- empty and duplicate validation-receipt identity rejection.
+The release-binding repair was also test-first. Commit `c8346a5fb1652c02a515b826f856a83e2072ae63` added `tests/compatibility_release_binding.rs` with failing expectations for target evidence produced for another release identity or source hash. Production commit `f00ebc1523a682d35307ea4b14593378d1b8d190` introduced `CompatibilityReleaseIdentity` and typed `CompatibilityReleaseMismatch` / `CompatibilitySourceMismatch` failures before the test fixtures were adapted to the new constructor.
 
-Repository CI runs formatting, Clippy with warnings denied, all-target tests and rustdoc warnings-as-errors on `ubuntu-24.04`. It installs checksum-verified `cargo-llvm-cov` 0.9.0 through a commit-pinned `taiki-e/install-action`, installs exact `nightly-2026-08-30` with `llvm-tools-preview`, requires 100% line coverage, exports LLVM branch coverage, rejects missing/zero branch evidence, and requires `covered == count` for 100% branch coverage. Nightly is isolated to coverage measurement; production/lint/test semantics continue on the runner's stable Rust toolchain.
+`tests/publication_admission.rs` additionally covers required identity failures, both target contracts, SHA-256 syntax branches, order-independent blockers, duplicate rejection, release-bound authority traceability accessors, compatible/incompatible canonical JSON, and every JSON control-character class.
 
-## Cryptographic implementation evidence
+## Coverage contract
 
-SHA-256 is the byte-identity primitive. NIST FIPS 180-4 remains the published Secure Hash Standard containing SHA-256 while NIST prepares a revision; current NIST CAVP material continues to list SHA-256 under FIPS 180-4. The implementation pins RustCrypto `sha2` 0.11.0, released 2026-03-25, and keeps all digest computation in safe Rust. Dependency provenance and vulnerability evidence remain subject to the protected Dependency Review/SAST/security gates; a missing dependency-graph comparison is never treated as clean.
+Repository CI runs rustfmt, Clippy with warnings denied, all-target tests, and rustdoc warnings-as-errors on `ubuntu-24.04`. Coverage uses pinned `cargo-llvm-cov` 0.9.0 plus exact `nightly-2026-08-30` branch instrumentation. The gate parses LLVM per-file summaries and requires each repository `src/` production file to have 100% line coverage and 100% branch coverage; test-only files cannot offset uncovered production paths. The gate also requires a nonzero production branch denominator.
 
 ## Security and operability
 
-The crate has no network, filesystem, secret handling or unsafe Rust. The only new production dependency is the explicitly pinned RustCrypto SHA-2 implementation and its transitive digest/backend dependencies. Central Security/SAST/review workflows remain independent merge gates. A central Dependency Review 403 is intentionally not translated into success; repository security capability must be repaired before protected integration.
+The admission crate has no external package dependency, filesystem access, secret handling, or unsafe Rust. Authority-port adapters are explicit privileged boundaries and require least privilege/auditability when persistence or remote services arrive. Central Security/SAST/review workflows remain independent merge gates. Dependency Review HTTP 403 remains a fail-closed control-plane/configuration incident tracked in `ContextualWisdomLab/.github#810`; it is never translated into green.
 
 ## Future boundaries
 
-The next product slice is the actual deterministic native-web renderer/packager that produces `artifact_bytes` and `build_manifest_bytes` from a canonical immutable release and released native interoperability contract. It must feed those exact bytes into `finalize_native_web_publication`; no renderer may mint its own trusted receipt. Persistence follows with 3NF, two-or-more-word `snake_case` objects and append-only release/publication facts. A service/API boundary is introduced only when durable storage or remote publishing requires one; at that point asynchronous request handling, compose deployment and k6 latency/load evidence become mandatory.
+The native byte-finalization slice consumes only a compatible opaque admission and exact immutable release/artifact/manifest bytes. A full native renderer remains gated on a released shared xAPI 2.0 contract from `ContextualWisdomLab/learning-interoperability-contracts`. Persistence follows with 3NF two-or-more-word `snake_case` objects, append-only immutable authority, explicit transaction/audit semantics, and item-level UPSERT only for mutable indexes. A service/API boundary is introduced only when durable storage or remote publishing requires one; then async handling, compose deployability, observability/recovery, and k6 evidence become mandatory.
