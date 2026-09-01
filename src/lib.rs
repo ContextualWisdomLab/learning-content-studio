@@ -52,7 +52,10 @@ impl BlockingFeature {
 pub struct PublicationRequest {
     /// Immutable content release identity.
     pub content_release_id: String,
-    /// SHA-256 identity of the canonical immutable release bytes.
+    /// Caller-supplied SHA-256 identity of the canonical immutable release bytes.
+    ///
+    /// Admission validates digest syntax only. A byte-producing publisher must recompute and
+    /// verify this identity against the exact immutable release bytes before emission.
     pub source_hash: String,
     /// Publisher target selected by the caller.
     pub publisher_target: PublisherTarget,
@@ -75,7 +78,7 @@ pub struct PublicationRequest {
 pub struct PublicationMetadata {
     /// Immutable content release identity.
     pub content_release_id: String,
-    /// SHA-256 identity of the canonical immutable release bytes.
+    /// Caller-supplied SHA-256 identity; syntax-validated by admission, not recomputed here.
     pub source_hash: String,
     /// Version-specific publisher contract identity.
     pub publisher_contract_id: String,
@@ -96,13 +99,16 @@ pub enum PublicationOutcome {
     Incompatible {
         /// Metadata binding the incompatibility to exact release and contract authority.
         metadata: PublicationMetadata,
-        /// Canonically ordered blockers.
+        /// Blocking evidence. [`PublicationOutcome::canonical_json`] sorts this defensively.
         blocking_features: Vec<BlockingFeature>,
     },
 }
 
 impl PublicationOutcome {
     /// Serializes the admission result into deterministic JSON field and array order.
+    ///
+    /// Incompatible evidence is defensively sorted even if a caller directly constructs the
+    /// public enum rather than obtaining it from [`evaluate_publication`].
     #[must_use]
     pub fn canonical_json(&self) -> String {
         match self {
@@ -119,7 +125,9 @@ impl PublicationOutcome {
                 metadata,
                 blocking_features,
             } => {
-                let blockers = blocking_features
+                let mut canonical_blockers = blocking_features.clone();
+                canonical_blockers.sort();
+                let blockers = canonical_blockers
                     .iter()
                     .map(|feature| {
                         format!(
@@ -165,7 +173,9 @@ pub enum AdmissionError {
 ///
 /// The function never converts one publisher contract into another. Incompatibility
 /// entries are sorted by `feature_code`, `source_component_reference`, then
-/// `reason_code`, and exact duplicate triples are rejected.
+/// `reason_code`, and exact duplicate triples are rejected. The source hash is checked
+/// for SHA-256 syntax here; byte-to-digest verification belongs to the downstream
+/// byte-producing publisher boundary.
 ///
 /// # Errors
 ///
