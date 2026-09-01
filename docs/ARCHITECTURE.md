@@ -19,9 +19,9 @@ Publication Admission separates caller intent from authority. `PublicationReques
 Two explicit security-sensitive authority ports are anti-corruption boundaries:
 
 - `ReleaseAuthorityPort` supplies `ReleaseAuthorityEvidence` from the immutable-release authority, including release identity, source SHA-256, locale, approval state, and stable approval-evidence identity;
-- `TargetCompatibilityPort` supplies `TargetCompatibilityEvidence` from the target validator, including target, contract/version/standard, validation-evidence identity, and semantic blockers.
+- `TargetCompatibilityPort` supplies `TargetCompatibilityEvidence` from the target validator. Each record includes a `CompatibilityReleaseIdentity` with the exact immutable `content_release_id` and `source_hash` validated, plus target, contract/version/standard, validation-evidence identity, and semantic blockers.
 
-`evaluate_publication` cross-binds returned evidence to the requested release/target, validates required identities and contract ownership, canonically sorts/rejects duplicate blockers, then creates the opaque `PublicationOutcome`. A port implementation that derives evidence from mutable request fields or synthetic/demo state violates the architecture contract.
+`evaluate_publication` cross-binds returned release evidence to caller release intent and target evidence to both the requested target and the exact immutable release identity/hash. Cached compatibility evidence from a different release or different source bytes fails closed before contract or blocker admission. The service then validates required identities and contract ownership, canonically sorts/rejects duplicate blockers, and creates the opaque `PublicationOutcome`. A port implementation that derives evidence from mutable request fields or synthetic/demo state violates the architecture contract.
 
 Compatible admission permits the next target-specific step; it is not artifact, certification, or interoperability-conformance evidence. Downstream native byte finalization recomputes release/artifact/manifest hashes from exact bytes.
 
@@ -46,7 +46,9 @@ Content Authoring & Release ----> Rights & Accessibility Evidence
           | immutable release authority
           v
 ReleaseAuthorityPort -----> Publication Admission <----- TargetCompatibilityPort
-                                  |
+                                  |                              |
+                                  |                 exact release id + source hash
+                                  |                              |
                                   +----> Native Web Renderer -> Byte Finalization
                                   +----> cmi5 Quartz adapter
                                   +----> later versioned adapters
@@ -61,7 +63,8 @@ Downstream LMS/LRS/assessment systems consume released projections/contracts and
 
 - `PublicationRequest` — caller intent only;
 - `ReleaseAuthorityEvidence` — immutable-release/approval evidence value object;
-- `TargetCompatibilityEvidence` — target-validation evidence value object;
+- `CompatibilityReleaseIdentity` — exact immutable release and source-hash identity validated by the target authority;
+- `TargetCompatibilityEvidence` — release-bound target-validation evidence value object;
 - `BlockingFeature` — semantic incompatibility evidence;
 - `PublicationMetadata` — validated authority traceability;
 - `PublicationOutcome` — opaque admission result;
