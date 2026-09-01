@@ -3,12 +3,15 @@ name = "learning-content-studio"
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
-description = "Deterministic release admission core for ContextualWisdomLab Learning Content Studio"
+description = "Deterministic release admission and publication evidence core for ContextualWisdomLab Learning Content Studio"
 publish = false
 
 [lib]
 name = "learning_content_studio"
 path = "src/lib.rs"
+
+[dependencies]
+sha2 = "=0.11.0"
 
 [lints.rust]
 missing_docs = "deny"
