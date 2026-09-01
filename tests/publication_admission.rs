@@ -135,7 +135,10 @@ fn compatible_admission_preserves_exact_release_authority() {
 
     let metadata = outcome.metadata();
     assert_eq!(metadata.content_release_id(), "content_release_01");
+    assert_eq!(metadata.source_hash(), format!("sha256:{}", "a".repeat(64)));
     assert_eq!(metadata.publisher_contract_id(), "native_cwl_xapi_2_0/v1");
+    assert_eq!(metadata.publisher_version(), "1.0.0");
+    assert_eq!(metadata.standard_revision(), "2026-08");
     assert_eq!(metadata.locale_code(), "en-US");
 
     assert_eq!(
@@ -153,9 +156,11 @@ fn canonical_json_escapes_all_json_control_classes() {
     input.content_release_id = "q\"\\\n\r\t\u{08}\u{0c}\u{01}é".into();
 
     let outcome = evaluate_publication(input).expect("valid escaped identity");
-    assert!(outcome.canonical_json().contains(
-        "\"content_release_id\":\"q\\\"\\\\\\n\\r\\t\\b\\f\\u0001é\""
-    ));
+    assert!(
+        outcome
+            .canonical_json()
+            .contains("\"content_release_id\":\"q\\\"\\\\\\n\\r\\t\\b\\f\\u0001é\"")
+    );
 }
 
 #[test]
