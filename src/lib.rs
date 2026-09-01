@@ -99,7 +99,10 @@ impl PublicationMetadata {
         &self.content_release_id
     }
 
-    /// Returns the syntax-validated caller-supplied SHA-256 identity.
+    /// Returns the SHA-256 source identity represented by this metadata value.
+    ///
+    /// Admission metadata preserves the caller's validated hexadecimal spelling; publication
+    /// receipt metadata uses the canonical lowercase identity recomputed from exact release bytes.
     #[must_use]
     pub fn source_hash(&self) -> &str {
         &self.source_hash
@@ -221,7 +224,7 @@ pub struct NativeWebPublicationReceipt {
 }
 
 impl NativeWebPublicationReceipt {
-    /// Returns the validated publication authority inherited from admission.
+    /// Returns canonical byte-verified publication authority metadata.
     #[must_use]
     pub fn metadata(&self) -> &PublicationMetadata {
         &self.metadata
@@ -385,9 +388,10 @@ pub fn evaluate_publication(
 /// identified. Validation-receipt identities are sorted for deterministic output and exact
 /// duplicates are rejected.
 ///
-/// Hexadecimal case in the admitted source identity is not semantic. The recomputed lowercase
-/// digest is compared case-insensitively while the caller's already-admitted identity is
-/// preserved verbatim in the receipt.
+/// Hexadecimal case in the admitted source identity is not semantic. Admission retains the
+/// caller's exact validated spelling, while the receipt records the lowercase SHA-256 identity
+/// recomputed from exact release bytes. Equivalent digest spellings therefore yield identical
+/// publication receipt evidence.
 ///
 /// # Errors
 ///
@@ -408,9 +412,9 @@ pub fn finalize_native_web_publication(
         return Err(NativeWebPublicationError::WrongPublisherContract);
     }
 
-    let Some(admitted_digest) = outcome.metadata.source_hash.strip_prefix("sha256:") else {
-        return Err(NativeWebPublicationError::SourceHashMismatch);
-    };
+    // Trusted outcomes are opaque outside this crate and admission guarantees the exact
+    // `sha256:` prefix plus a 64-hex digest, so this slice has no unreachable error branch.
+    let admitted_digest = &outcome.metadata.source_hash["sha256:".len()..];
     let recomputed_source_hash = sha256_identity(canonical_release_bytes);
     let recomputed_digest = &recomputed_source_hash["sha256:".len()..];
     if !recomputed_digest.eq_ignore_ascii_case(admitted_digest) {
@@ -435,8 +439,17 @@ pub fn finalize_native_web_publication(
         return Err(NativeWebPublicationError::DuplicateValidationReceiptId);
     }
 
+    let receipt_metadata = PublicationMetadata {
+        content_release_id: outcome.metadata.content_release_id.clone(),
+        source_hash: recomputed_source_hash,
+        publisher_contract_id: outcome.metadata.publisher_contract_id.clone(),
+        publisher_version: outcome.metadata.publisher_version.clone(),
+        standard_revision: outcome.metadata.standard_revision.clone(),
+        locale_code: outcome.metadata.locale_code.clone(),
+    };
+
     Ok(NativeWebPublicationReceipt {
-        metadata: outcome.metadata.clone(),
+        metadata: receipt_metadata,
         artifact_hash: sha256_identity(artifact_bytes),
         build_manifest_hash: sha256_identity(build_manifest_bytes),
         validation_receipt_ids: receipt_ids,
