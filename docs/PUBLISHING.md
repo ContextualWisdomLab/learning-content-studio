@@ -32,6 +32,19 @@ Identical release bytes, publisher contract ID/version, and target parameters mu
 
 The QTI 3.0 publisher is reference-only in this baseline: it emits/binds approved QTI assessment references or metadata and does not claim complete course-to-QTI package conversion.
 
+## Executable Publication Admission boundary
+
+The first executable Rust slice does not yet build packages. It gates one approved immutable release before a target adapter is allowed to emit anything. `evaluate_publication` requires exact release identity, SHA-256 source identity, explicit target, publisher contract/version, target-standard revision and locale. A compatible result means only that target transformation may proceed; it is not an artifact, certification or interoperability-conformance claim.
+
+The currently executable target/contract mapping is one-to-one:
+
+| Publisher target | Required publisher contract | Runtime protocol boundary |
+| --- | --- | --- |
+| `native_web_publisher` | `native_cwl_xapi_2_0/v1` | native CWL / xAPI 2.0 |
+| `cmi5_quartz_publisher` | `cmi5_quartz_xapi_1_0_3/v1` | cmi5 Quartz / xAPI 1.0.3 |
+
+Selecting the other target's contract is a hard `ContractTargetMismatch`; no fallback, compatibility alias or cross-conversion is permitted. The other listed publisher targets remain documented future adapters and are not admitted by the current kernel.
+
 ## Machine-readable result contract
 
 Every publication outcome uses the same target-revision field name, `standard_revision`, so consumers do not need outcome-specific field mapping.
@@ -50,6 +63,8 @@ build_manifest_hash
 validation_receipt_ids
 ```
 
+The current admission kernel emits the common authority fields plus `publication_status` and `blocking_features`; artifact-only hashes/receipt IDs are added by a later target adapter after actual bytes exist.
+
 An incompatible publication returns a deterministic payload with this minimum shape:
 
 ```json
@@ -60,6 +75,7 @@ An incompatible publication returns a deterministic payload with this minimum sh
   "publisher_version": "1.0.0",
   "standard_revision": "target-revision",
   "source_hash": "sha256:...",
+  "locale_code": "en-US",
   "blocking_features": [
     {
       "feature_code": "unsupported_feature",
