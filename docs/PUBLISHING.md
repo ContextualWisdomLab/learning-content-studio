@@ -34,6 +34,8 @@ The QTI 3.0 publisher is reference-only in this baseline: it emits/binds approve
 
 ## Machine-readable result contract
 
+Every publication outcome uses the same target-revision field name, `standard_revision`, so consumers do not need outcome-specific field mapping.
+
 A successful publication artifact records at least:
 
 ```text
@@ -56,7 +58,7 @@ An incompatible publication returns a deterministic payload with this minimum sh
   "content_release_id": "release-reference",
   "publisher_contract_id": "publisher-contract-reference",
   "publisher_version": "1.0.0",
-  "target_standard_revision": "target-revision",
+  "standard_revision": "target-revision",
   "source_hash": "sha256:...",
   "blocking_features": [
     {
@@ -68,7 +70,7 @@ An incompatible publication returns a deterministic payload with this minimum sh
 }
 ```
 
-Blocking features are sorted deterministically by `feature_code` then `source_component_reference`.
+Blocking features are sorted deterministically by `feature_code`, then `source_component_reference`, then `reason_code`. Duplicate entries with all three keys equal are invalid rather than preserving input order.
 
 ## xAPI-version-specific publisher contracts
 
