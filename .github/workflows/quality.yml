@@ -33,8 +33,9 @@ jobs:
               Path("CLAUDE.md"),
               Path("CHANGELOG.md"),
               Path("docs/ARCHITECTURE.md"),
-              Path("docs/adr/0001-content-authority-boundary.md"),
+              Path("docs/adr/0001-authoring-release-boundary.md"),
               Path("docs/doctoring/STANDARD_TRACEABILITY.md"),
+              Path("docs/PUBLISHING.md"),
           ]
           missing = [str(path) for path in required if not path.is_file()]
           if missing:
