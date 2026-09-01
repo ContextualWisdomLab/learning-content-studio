@@ -25,9 +25,9 @@ finalize_native_web_publication(
 
 `PublicationRequest` contains exact immutable release identity, caller-supplied `sha256:` source identity, publisher target, target-owned contract ID, publisher version, target standard revision, locale, approval state and zero or more blocking features. Publication Admission validates SHA-256 syntax but cannot prove digest/content equality because it does not own release bytes.
 
-A successful `PublicationOutcome` is a trusted result of this validation boundary. Its fields and `PublicationMetadata` fields are private outside the crate; callers receive read-only accessors. Downstream code cannot construct or mutate a value that impersonates a validated compatible/incompatible result.
+A successful `PublicationOutcome` is a trusted result of this validation boundary. Its fields and `PublicationMetadata` fields are private outside the crate; callers receive read-only accessors. Downstream code cannot construct or mutate a value that impersonates a validated compatible/incompatible result. Admission preserves the exact validated source-hash spelling supplied by its caller for auditability.
 
-`finalize_native_web_publication` is the first byte-owning trust boundary. It requires the exact canonical immutable release bytes, final emitted artifact bytes and build-manifest bytes. It recomputes SHA-256 over each byte set, compares the source digest to the admitted identity, and returns an opaque `NativeWebPublicationReceipt` carrying immutable authority metadata, `artifact_hash`, `build_manifest_hash` and canonically ordered validation receipt IDs. It does not render content and therefore does not claim that a complete native-web generator exists.
+`finalize_native_web_publication` is the first byte-owning trust boundary. It requires the exact canonical immutable release bytes, final emitted artifact bytes and build-manifest bytes. It recomputes SHA-256 over each byte set, compares the source digest to the admitted identity, and returns an opaque `NativeWebPublicationReceipt` carrying immutable authority metadata, `artifact_hash`, `build_manifest_hash` and canonically ordered validation receipt IDs. Receipt metadata records the recomputed lowercase `sha256:` source identity so equivalent upper/lowercase admission spellings cannot create different publication evidence. It does not render content and therefore does not claim that a complete native-web generator exists.
 
 ## Admission validation order
 
@@ -50,15 +50,16 @@ A successful `PublicationOutcome` is a trusted result of this validation boundar
 6. reject empty validation-receipt identities;
 7. sort validation-receipt identities lexically and reject exact duplicates;
 8. compute exact SHA-256 identities for artifact and build-manifest bytes;
-9. return an opaque deterministic native-web publication receipt.
+9. construct receipt metadata with the canonical lowercase recomputed source identity while retaining the original validated spelling in the admission outcome;
+10. return an opaque deterministic native-web publication receipt.
 
-Hexadecimal case is non-semantic for a valid admitted digest: finalization compares the recomputed digest case-insensitively while preserving the already-admitted source identity verbatim in evidence. No mutable authoring source, wall clock, environment locale, network fetch, random identifier or process ordering enters either decision.
+Hexadecimal case is non-semantic for a valid admitted digest. Finalization compares the recomputed digest case-insensitively, admission preserves caller spelling, and publication receipt evidence uses the recomputed lowercase identity. No mutable authoring source, wall clock, environment locale, network fetch, random identifier or process ordering enters either decision.
 
 ## Deterministic evidence
 
 `PublicationOutcome::canonical_json()` emits fixed top-level field order from a validation-only outcome whose blockers were canonically sorted before construction. Compatible outcomes cannot carry blockers; incompatible outcomes always carry at least one blocker.
 
-`NativeWebPublicationReceipt::canonical_json()` emits fixed field order and canonically sorted validation receipt IDs. `artifact_hash` covers the final emitted artifact bytes exactly. `build_manifest_hash` covers the exact build-manifest bytes. `source_hash` remains the admitted immutable release identity after byte equality is independently re-established by finalization.
+`NativeWebPublicationReceipt::canonical_json()` emits fixed field order and canonically sorted validation receipt IDs. `artifact_hash` covers the final emitted artifact bytes exactly. `build_manifest_hash` covers the exact build-manifest bytes. Receipt `source_hash` is the lowercase SHA-256 identity recomputed from exact release bytes, so semantically identical uppercase/lowercase admitted hashes produce byte-identical receipt evidence.
 
 ## Failure model
 
@@ -66,7 +67,7 @@ Both boundaries fail closed. Cross-target contract selection, missing approval, 
 
 ## Test and coverage contract
 
-`tests/publication_admission.rs` was committed before the first production kernel and subsequent behavior fixes remain test-first. `tests/native_web_publication.rs` was committed at `2534b18c3422e6f353cc74c3443f8834d4f58cd2` before the native finalization implementation. The suite covers:
+`tests/publication_admission.rs` was committed before the first production kernel and subsequent behavior fixes remain test-first. `tests/native_web_publication.rs` was committed at `2534b18c3422e6f353cc74c3443f8834d4f58cd2` before the native finalization implementation. The digest-canonicalization regression identified by live review was committed first at `f0ac99ce16762638e76a5983892c5785db4f36b0`; production was repaired at `084aa22868f32157d13e63c99c9defbe6e9ac34a`. The suite covers:
 
 - unapproved release rejection;
 - native/cmi5 cross-target contract rejection;
@@ -75,7 +76,7 @@ Both boundaries fail closed. Cross-target contract selection, missing approval, 
 - compatible authority preservation and JSON escaping;
 - byte-identical native-web receipt reproduction independent of caller receipt-ID order;
 - exact source-byte mismatch rejection;
-- admitted upper-case digest equivalence without rewriting authority metadata;
+- equivalent upper/lowercase admitted digest spellings producing identical canonical receipt evidence while admission preserves caller spelling;
 - incompatible admission and cmi5 contract rejection at native finalization;
 - empty emitted artifact/build-manifest rejection;
 - empty and duplicate validation-receipt identity rejection.
