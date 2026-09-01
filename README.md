@@ -1,5 +1,7 @@
 # Learning Content Studio
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ContextualWisdomLab/learning-content-studio)
+
 The LCMS and authoring authority for the CWL Learning Platform.
 
 ## Scope
