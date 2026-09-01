@@ -15,12 +15,13 @@ Deterministic normalization rules:
 - timestamps come from immutable release metadata and are normalized to UTC; publication never injects the current time into hashed payload bytes;
 - asset identifiers are derived from the content release identity plus normalized asset path/content identity, not from random or machine-local IDs;
 - `source_hash` covers the canonical immutable release manifest and release-owned content bytes, not mutable authoring sources;
+- admission may preserve the caller's validated upper/lowercase hexadecimal spelling, but byte-finalized publication receipts use the lowercase SHA-256 identity recomputed from exact release bytes;
 - `artifact_hash` covers the final emitted artifact bytes exactly;
 - `build_manifest_hash` covers the exact build-manifest bytes used to describe that artifact;
 - validation receipt identities are stable external evidence references and are serialized in deterministic lexical order;
 - a publisher contract version change is explicit even when the target standard revision does not change.
 
-Identical release bytes, publisher contract ID/version, target parameters, rendered artifact bytes, build-manifest bytes and validation-receipt identities must produce identical evidence bytes and hashes or an identical incompatibility payload.
+Identical release bytes, publisher contract ID/version, target parameters, rendered artifact bytes, build-manifest bytes and validation-receipt identities must produce identical evidence bytes and hashes or an identical incompatibility payload, including when equivalent admitted SHA-256 values differ only in hexadecimal case.
 
 ## Initial publisher targets
 
@@ -59,9 +60,10 @@ Before a publication receipt can exist it must:
 4. reject zero-byte artifact or build-manifest payloads;
 5. reject empty validation-receipt identities, canonically sort them and reject duplicates;
 6. compute SHA-256 over the exact final artifact bytes and exact build-manifest bytes;
-7. return an opaque `NativeWebPublicationReceipt` whose fields cannot be forged through a public constructor.
+7. normalize receipt `source_hash` to the lowercase identity recomputed from exact release bytes while retaining caller spelling only in the admission outcome;
+8. return an opaque `NativeWebPublicationReceipt` whose fields cannot be forged through a public constructor.
 
-The admitted source digest may contain upper- or lowercase hexadecimal. Digest comparison is case-insensitive because hexadecimal case is not semantic, while the original admitted identity is preserved verbatim in the receipt.
+The admitted source digest may contain upper- or lowercase hexadecimal. Digest comparison is case-insensitive because hexadecimal case is not semantic. Admission remains auditable and preserves its exact validated input, while final publication evidence is canonical and independent of input spelling.
 
 This boundary **does not render or transform learning content**. It records trustworthy byte provenance after a native renderer has produced bytes. Therefore the existence of a publication receipt is not yet evidence that the repository contains a complete buyer-facing native-web generator or released xAPI 2.0 mapping implementation.
 
@@ -84,7 +86,7 @@ build_manifest_hash
 validation_receipt_ids
 ```
 
-`NativeWebPublicationReceipt::canonical_json()` uses a fixed top-level field order and lexically ordered validation-receipt IDs. `artifact_hash` and `build_manifest_hash` are always recomputed from exact bytes at finalization; callers cannot supply trusted hash strings directly.
+`NativeWebPublicationReceipt::canonical_json()` uses a fixed top-level field order and lexically ordered validation-receipt IDs. Receipt `source_hash`, `artifact_hash` and `build_manifest_hash` are recomputed from exact bytes at finalization; callers cannot supply those trusted publication-evidence values directly.
 
 An incompatible publication returns a deterministic payload with this minimum shape:
 
