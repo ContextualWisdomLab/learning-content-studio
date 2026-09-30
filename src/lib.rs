@@ -26,12 +26,9 @@ impl PublisherTarget {
 /// A feature that prevents lossless publication to the selected target.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct BlockingFeature {
-    /// Stable code identifying the unsupported source feature.
-    pub feature_code: String,
-    /// Stable reference to the source component containing the feature.
-    pub source_component_reference: String,
-    /// Stable reason describing why publication must fail closed.
-    pub reason_code: String,
+    feature_code: String,
+    source_component_reference: String,
+    reason_code: String,
 }
 
 impl BlockingFeature {
@@ -43,6 +40,24 @@ impl BlockingFeature {
             source_component_reference: source_component_reference.into(),
             reason_code: reason_code.into(),
         }
+    }
+
+    /// Returns the stable code identifying the unsupported source feature.
+    #[must_use]
+    pub fn feature_code(&self) -> &str {
+        &self.feature_code
+    }
+
+    /// Returns the stable reference to the source component containing the feature.
+    #[must_use]
+    pub fn source_component_reference(&self) -> &str {
+        &self.source_component_reference
+    }
+
+    /// Returns the stable reason describing why publication must fail closed.
+    #[must_use]
+    pub fn reason_code(&self) -> &str {
+        &self.reason_code
     }
 }
 
