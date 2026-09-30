@@ -22,6 +22,11 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact revision
+        env:
+          EXPECTED_CHECKOUT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_CHECKOUT_SHA"
       - name: Validate product contract
         shell: python3 {0}
         run: |
@@ -33,6 +38,8 @@ jobs:
               Path("CLAUDE.md"),
               Path("CHANGELOG.md"),
               Path("Cargo.toml"),
+              Path("Cargo.lock"),
+              Path(".gitignore"),
               Path("src/lib.rs"),
               Path("tests/publication_admission.rs"),
               Path("tests/authority_ports.rs"),
@@ -73,9 +80,9 @@ jobs:
       - name: Verify Rust formatting
         run: cargo fmt --check
       - name: Verify Rust lint contract
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --locked --all-targets -- -D warnings
       - name: Run publication kernel tests
-        run: cargo test --all-targets
+        run: cargo test --locked --all-targets
       - name: Install pinned coverage tool
         uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
         with:
@@ -83,20 +90,21 @@ jobs:
           fallback: none
       - name: Install pinned branch-coverage toolchain
         run: rustup toolchain install nightly-2026-08-30 --profile minimal --component llvm-tools-preview
-      - name: Enforce 100 percent production line and branch coverage
+      - name: Enforce 100 percent production statement, line, and branch coverage
         shell: python3 {0}
         run: |
           import json
           import subprocess
           from pathlib import Path
 
-          report_path = Path("target/llvm-cov/coverage.json")
+          report_path = Path("target/coverage.json")
           report_path.parent.mkdir(parents=True, exist_ok=True)
           subprocess.run(
               [
                   "cargo",
                   "+nightly-2026-08-30",
                   "llvm-cov",
+                  "--locked",
                   "--all-targets",
                   "--branch",
                   "--json",
@@ -133,6 +141,23 @@ jobs:
           production_branch_count = 0
           production_branch_covered = 0
           for relative, summary in production:
+              regions = summary.get("regions") or {}
+              region_count = regions.get("count")
+              region_covered = regions.get("covered")
+              if (
+                  not isinstance(region_count, int)
+                  or not isinstance(region_covered, int)
+                  or region_count <= 0
+              ):
+                  raise SystemExit(
+                      f"production statement/region evidence malformed for {relative}: {regions}"
+                  )
+              if region_covered != region_count:
+                  raise SystemExit(
+                      f"production statement/region coverage below 100% for {relative}: "
+                      f"{region_covered}/{region_count}"
+                  )
+
               lines = summary.get("lines") or {}
               line_count = lines.get("count")
               line_covered = lines.get("covered")
@@ -171,10 +196,11 @@ jobs:
                   f"{production_branch_covered}/{production_branch_count}"
               )
           print(
-              "production src/ line coverage 100%; production branch coverage "
+              "production src/ statement/region and line coverage 100%; "
+              "production branch coverage "
               f"{production_branch_covered}/{production_branch_count} (100%)"
           )
       - name: Verify public API documentation
         env:
           RUSTDOCFLAGS: -D warnings
-        run: cargo doc --no-deps
+        run: cargo doc --locked --no-deps

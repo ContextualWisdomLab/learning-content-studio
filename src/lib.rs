@@ -453,12 +453,16 @@ pub fn evaluate_publication(
     release_authority: &dyn ReleaseAuthorityPort,
     compatibility_authority: &dyn TargetCompatibilityPort,
 ) -> Result<PublicationOutcome, AdmissionError> {
-    require_non_empty(&request.content_release_id, "content_release_id")?;
+    let PublicationRequest {
+        content_release_id: requested_content_release_id,
+        publisher_target: requested_publisher_target,
+    } = request;
+    require_non_empty(&requested_content_release_id, "content_release_id")?;
 
     let release = release_authority
-        .release_evidence(&request.content_release_id)
+        .release_evidence(&requested_content_release_id)
         .ok_or(AdmissionError::ReleaseEvidenceUnavailable)?;
-    if release.content_release_id != request.content_release_id {
+    if release.content_release_id != requested_content_release_id {
         return Err(AdmissionError::ReleaseAuthorityMismatch);
     }
     if !release.approved {
@@ -476,9 +480,9 @@ pub fn evaluate_publication(
     }
 
     let mut compatibility = compatibility_authority
-        .compatibility_evidence(&release, request.publisher_target)
+        .compatibility_evidence(&release, requested_publisher_target)
         .ok_or(AdmissionError::CompatibilityEvidenceUnavailable)?;
-    if compatibility.publisher_target != request.publisher_target {
+    if compatibility.publisher_target != requested_publisher_target {
         return Err(AdmissionError::CompatibilityAuthorityMismatch);
     }
     if compatibility.release_identity.content_release_id != release.content_release_id {
@@ -498,7 +502,7 @@ pub fn evaluate_publication(
         &compatibility.validation_evidence_id,
         "target_validation_evidence_id",
     )?;
-    if compatibility.publisher_contract_id != request.publisher_target.required_contract_id() {
+    if compatibility.publisher_contract_id != requested_publisher_target.required_contract_id() {
         return Err(AdmissionError::ContractTargetMismatch);
     }
 

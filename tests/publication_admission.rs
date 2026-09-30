@@ -67,8 +67,7 @@ fn approved_release() -> ReleaseAuthorityEvidence {
 }
 
 fn compatibility(
-    content_release_id: &str,
-    source_hash: &str,
+    release_identity: CompatibilityReleaseIdentity,
     target: PublisherTarget,
     contract_id: &str,
     version: &str,
@@ -77,7 +76,7 @@ fn compatibility(
     blockers: Vec<BlockingFeature>,
 ) -> TargetCompatibilityEvidence {
     TargetCompatibilityEvidence::new(
-        CompatibilityReleaseIdentity::new(content_release_id, source_hash),
+        release_identity,
         target,
         contract_id,
         version,
@@ -89,8 +88,7 @@ fn compatibility(
 
 fn native_compatibility(blockers: Vec<BlockingFeature>) -> TargetCompatibilityEvidence {
     compatibility(
-        "content_release_01",
-        &hash('a'),
+        CompatibilityReleaseIdentity::new("content_release_01", &hash('a')),
         PublisherTarget::NativeWeb,
         "native_cwl_xapi_2_0/v1",
         "1.0.0",
@@ -125,7 +123,10 @@ fn request_and_authority_accessors_preserve_exact_values() {
     assert_eq!(release.source_hash(), hash('a'));
     assert_eq!(release.locale_code(), "en-US");
     assert!(release.approved());
-    assert_eq!(release.approval_evidence_id(), "release_approval_receipt_01");
+    assert_eq!(
+        release.approval_evidence_id(),
+        "release_approval_receipt_01"
+    );
 
     let target = native_compatibility(Vec::new());
     assert_eq!(
@@ -137,7 +138,10 @@ fn request_and_authority_accessors_preserve_exact_values() {
     assert_eq!(target.publisher_contract_id(), "native_cwl_xapi_2_0/v1");
     assert_eq!(target.publisher_version(), "1.0.0");
     assert_eq!(target.standard_revision(), "2026-08");
-    assert_eq!(target.validation_evidence_id(), "target_validation_receipt_01");
+    assert_eq!(
+        target.validation_evidence_id(),
+        "target_validation_receipt_01"
+    );
     assert!(target.blocking_features().is_empty());
 }
 
@@ -163,8 +167,7 @@ fn rejects_unapproved_authority_evidence() {
 #[test]
 fn rejects_cross_target_contract_selection_and_accepts_cmi5_owner() {
     let wrong_contract = compatibility(
-        "content_release_01",
-        &hash('a'),
+        CompatibilityReleaseIdentity::new("content_release_01", &hash('a')),
         PublisherTarget::NativeWeb,
         "cmi5_quartz_xapi_1_0_3/v1",
         "1.0.0",
@@ -182,8 +185,7 @@ fn rejects_cross_target_contract_selection_and_accepts_cmi5_owner() {
     );
 
     let cmi5 = compatibility(
-        "content_release_01",
-        &hash('a'),
+        CompatibilityReleaseIdentity::new("content_release_01", &hash('a')),
         PublisherTarget::Cmi5Quartz,
         "cmi5_quartz_xapi_1_0_3/v1",
         "1.0.0",
@@ -191,8 +193,12 @@ fn rejects_cross_target_contract_selection_and_accepts_cmi5_owner() {
         "target_validation_receipt_02",
         Vec::new(),
     );
-    let outcome = evaluate(request(PublisherTarget::Cmi5Quartz), approved_release(), cmi5)
-        .expect("cmi5 authority owns its contract");
+    let outcome = evaluate(
+        request(PublisherTarget::Cmi5Quartz),
+        approved_release(),
+        cmi5,
+    )
+    .expect("cmi5 authority owns its contract");
     assert_eq!(outcome.status(), PublicationStatus::Compatible);
 }
 
@@ -234,8 +240,7 @@ fn uppercase_sha256_identity_is_accepted_without_rewriting_authority_evidence() 
             "release_approval_receipt_01",
         ),
         compatibility(
-            "content_release_01",
-            &upper,
+            CompatibilityReleaseIdentity::new("content_release_01", &upper),
             PublisherTarget::NativeWeb,
             "native_cwl_xapi_2_0/v1",
             "1.0.0",
@@ -358,8 +363,7 @@ fn canonical_json_escapes_all_json_control_classes() {
             "release_approval_receipt_01",
         ),
         compatibility(
-            release_id,
-            &source_hash,
+            CompatibilityReleaseIdentity::new(release_id, &source_hash),
             PublisherTarget::NativeWeb,
             "native_cwl_xapi_2_0/v1",
             "1.0.0",
@@ -388,7 +392,12 @@ fn rejects_empty_request_or_release_authority_fields() {
     );
 
     let cases = [
-        (" \t".to_owned(), "en-US", "release_approval_receipt_01", "source_hash"),
+        (
+            " \t".to_owned(),
+            "en-US",
+            "release_approval_receipt_01",
+            "source_hash",
+        ),
         (hash('a'), " ", "release_approval_receipt_01", "locale_code"),
         (hash('a'), "en-US", " ", "release_approval_evidence_id"),
     ];
@@ -396,7 +405,13 @@ fn rejects_empty_request_or_release_authority_fields() {
         assert_eq!(
             evaluate(
                 request(PublisherTarget::NativeWeb),
-                release("content_release_01", &source_hash, locale, true, approval_id),
+                release(
+                    "content_release_01",
+                    &source_hash,
+                    locale,
+                    true,
+                    approval_id
+                ),
                 native_compatibility(Vec::new()),
             ),
             Err(AdmissionError::EmptyRequiredField(field))
@@ -407,10 +422,34 @@ fn rejects_empty_request_or_release_authority_fields() {
 #[test]
 fn rejects_empty_target_authority_fields() {
     let cases = [
-        (" ", "1.0.0", "2026-08", "target_validation_receipt_01", "publisher_contract_id"),
-        ("native_cwl_xapi_2_0/v1", " ", "2026-08", "target_validation_receipt_01", "publisher_version"),
-        ("native_cwl_xapi_2_0/v1", "1.0.0", " ", "target_validation_receipt_01", "standard_revision"),
-        ("native_cwl_xapi_2_0/v1", "1.0.0", "2026-08", " ", "target_validation_evidence_id"),
+        (
+            " ",
+            "1.0.0",
+            "2026-08",
+            "target_validation_receipt_01",
+            "publisher_contract_id",
+        ),
+        (
+            "native_cwl_xapi_2_0/v1",
+            " ",
+            "2026-08",
+            "target_validation_receipt_01",
+            "publisher_version",
+        ),
+        (
+            "native_cwl_xapi_2_0/v1",
+            "1.0.0",
+            " ",
+            "target_validation_receipt_01",
+            "standard_revision",
+        ),
+        (
+            "native_cwl_xapi_2_0/v1",
+            "1.0.0",
+            "2026-08",
+            " ",
+            "target_validation_evidence_id",
+        ),
     ];
     for (contract, version, revision, evidence_id, field) in cases {
         assert_eq!(
@@ -418,8 +457,7 @@ fn rejects_empty_target_authority_fields() {
                 request(PublisherTarget::NativeWeb),
                 approved_release(),
                 compatibility(
-                    "content_release_01",
-                    &hash('a'),
+                    CompatibilityReleaseIdentity::new("content_release_01", &hash('a')),
                     PublisherTarget::NativeWeb,
                     contract,
                     version,

@@ -11,13 +11,13 @@ This baseline applies to the exact Git commit that contains it. GitHub PR/branch
 Live commercialization evidence:
 
 - repository is public, organization-owned, and `fork=false`;
-- PR #1 is open/Ready/mechanically mergeable at `e7977e5736b425e6221481934b25811ab27d7557`; exact-head Security Scan `33569943004`, SAST Semgrep `33569943093`, and Learning Content Studio Quality `33569943228` are queued and therefore not passing evidence yet;
+- PR #1 is open/Ready/mechanically mergeable at `e7977e5736b425e6221481934b25811ab27d7557`; exact-head SAST Semgrep `33569943093` and Learning Content Studio Quality `33569943228` passed, while Security Scan `33569943004` failed closed because GitHub Dependency Review returned HTTP 403;
 - the organization ruleset requires ordinary protected-branch governance, including independent approval; no self-approval, admin bypass, or protection weakening is accepted;
 - PR #6 is the first executable Publication Admission kernel and remains stacked on PR #1. Earlier review gaps around caller-controlled approval/blockers and aggregate-only coverage were repaired with authority ports and per-production-file coverage enforcement;
 - the latest live review exposed a separate trust defect: `TargetCompatibilityEvidence` was target-bound but not release-bound, so cached compatibility evidence for another immutable release could be replayed;
 - release-binding regression commit `c8346a5fb1652c02a515b826f856a83e2072ae63` preceded production repair and required mismatched release identity and mismatched source hash to fail closed;
 - production commit `f00ebc1523a682d35307ea4b14593378d1b8d190` adds `CompatibilityReleaseIdentity`, binds target evidence to exact `content_release_id` plus `source_hash`, and returns typed `CompatibilityReleaseMismatch` / `CompatibilitySourceMismatch` failures;
-- all affected existing test fixtures were adapted without removing prior edge cases; exact-head repository and central checks must be re-established after the documentation commits that contain this baseline;
+- all affected existing test fixtures were adapted without removing prior edge cases; the quality workflow now explicitly selects and verifies the pull-request head SHA, and exact-head repository and central checks must be re-established after the commit that contains this baseline;
 - downstream PR #7 must be revalidated against the release-bound admission API rather than assuming predecessor-head compatibility.
 
 ## Feature specification and ubiquitous language
@@ -61,7 +61,11 @@ Admission invariants:
 | --- | --- | --- | --- | --- |
 | Cached target compatibility evidence could authorize another release | Learning Content Studio | live unresolved Devin finding on PR #6 verified against source | **Repaired test-first** by `c8346a5f...` then `f00ebc15...`; exact release/hash binding enforced | Exact-head fmt/clippy/tests/production coverage/rustdoc + reviewer confirmation |
 | Caller assertions could forge trusted compatibility | Learning Content Studio | earlier PR #6 review | **Repaired test-first** with authority ports and intent-only request | Preserve under exact-head regression suite |
-| Aggregate coverage could mask production gaps | Learning Content Studio | earlier PR #6 review | **Repaired** with per-`src/` line/branch enforcement | Exact-head coverage proves every production file 100% |
+| Synthetic merge checkout could mislabel quality evidence as exact-head | Learning Content Studio | live unresolved PR #6 review verified against workflow | **Repaired test-first** with explicit PR-head checkout and SHA assertion | Exact-head workflow run proves checkout identity |
+| Line/branch coverage could miss uncovered statement regions | Learning Content Studio | live unresolved PR #6 review verified against workflow | **Repaired test-first** with per-`src/` statement/region, line, and branch enforcement | Exact-head coverage proves every production file 100% |
+| Coverage report path collided with `cargo-llvm-cov` cleanup | Learning Content Studio | local execution failed after all tests with `No such file or directory` for `target/llvm-cov/coverage.json` | **Repaired test-first** by moving output to `target/coverage.json` | Exact-head workflow produces and parses the report |
+| Publication request ownership failed denied Clippy lint | Learning Content Studio | local `cargo clippy --all-targets -- -D warnings` at `src/lib.rs:452` | **Repaired** by consuming command fields internally while preserving the value-taking public API | Exact-head Clippy and regression suite |
+| Cargo resolution was not immutable | Learning Content Studio | `Cargo.lock` absent from PR #6 and downstream PR #7 | **Repaired test-first at the stack foundation** by committing the lockfile and requiring `--locked`; downstream restack must update it for native dependencies | Exact-head locked build on each stack layer |
 | Parent foundation not protected-integrated | Learning Content Studio / governance | PR #1 at `e7977e57...`; exact-head required workflows queued | Open without bypass | Unchanged-head required checks + independent approval + ordinary merge |
 | Dependency Review availability/configuration | ContextualWisdomLab/.github / GitHub configuration | prior dependency compare HTTP 403; canonical `.github#810` | Fail closed | Authorized control-plane repair + exact-head canary |
 | Stacked central review | ContextualWisdomLab/.github | protected-default workflow/review policy | No local approval substitute | Central stacked review or protected retarget after parent integration |
@@ -83,7 +87,7 @@ Future authoritative relational objects use two-or-more-word `snake_case` names 
 - deterministic/hash-sensitive core logic remains Rust;
 - production consumes no synthetic demo data;
 - public Rust APIs use `missing_docs = "deny"` plus rustdoc warnings-as-errors;
-- CI requires rustfmt, Clippy `-D warnings`, all-target tests, and 100% per-production-file line/branch coverage with nonzero production branch evidence;
+- CI requires an asserted exact-head checkout, rustfmt, locked Clippy `-D warnings`, locked all-target tests, and 100% per-production-file statement/region, line, and branch coverage from the committed resolution with nonzero production region and branch evidence;
 - central exact-head Security/SAST/review evidence remains mandatory and cannot be replaced by repository-local green checks;
 - writer branches are re-fetched before mutation; stack updates use ordinary ancestry without force-push/destructive rebase.
 
