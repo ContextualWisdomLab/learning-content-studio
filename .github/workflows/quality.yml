@@ -138,6 +138,21 @@ jobs:
           if not production:
               raise SystemExit("no production src/ coverage records found")
 
+          expected_production = {
+              path.relative_to(repository_root)
+              for path in (repository_root / "src").rglob("*.rs")
+              if path.is_file()
+          }
+          reported_production = {relative for relative, _ in production}
+          missing_production = sorted(
+              str(path) for path in expected_production - reported_production
+          )
+          if missing_production:
+              raise SystemExit(
+                  "production source files missing from coverage report: "
+                  + ", ".join(missing_production)
+              )
+
           production_branch_count = 0
           production_branch_covered = 0
           for relative, summary in production:

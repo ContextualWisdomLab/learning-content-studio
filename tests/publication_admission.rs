@@ -118,6 +118,11 @@ fn request_and_authority_accessors_preserve_exact_values() {
     assert_eq!(input.content_release_id(), "content_release_01");
     assert_eq!(input.publisher_target(), PublisherTarget::NativeWeb);
 
+    let blocker = BlockingFeature::new("feature_1", "component_1", "reason_1");
+    assert_eq!(blocker.feature_code(), "feature_1");
+    assert_eq!(blocker.source_component_reference(), "component_1");
+    assert_eq!(blocker.reason_code(), "reason_1");
+
     let release = approved_release();
     assert_eq!(release.content_release_id(), "content_release_01");
     assert_eq!(release.source_hash(), hash('a'));
