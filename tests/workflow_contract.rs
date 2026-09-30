@@ -22,6 +22,12 @@ fn production_coverage_requires_statement_regions() {
 }
 
 #[test]
+fn production_coverage_requires_every_source_file_in_report() {
+    assert!(QUALITY_WORKFLOW.contains("(repository_root / \"src\").rglob(\"*.rs\")"));
+    assert!(QUALITY_WORKFLOW.contains("production source files missing from coverage report"));
+}
+
+#[test]
 fn rust_dependency_resolution_is_locked() {
     assert!(QUALITY_WORKFLOW.contains("cargo clippy --locked --all-targets"));
     assert!(QUALITY_WORKFLOW.contains("cargo test --locked --all-targets"));

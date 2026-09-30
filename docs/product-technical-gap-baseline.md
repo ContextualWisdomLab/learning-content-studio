@@ -63,6 +63,7 @@ Admission invariants:
 | Caller assertions could forge trusted compatibility | Learning Content Studio | earlier PR #6 review | **Repaired test-first** with authority ports and intent-only request | Preserve under exact-head regression suite |
 | Synthetic merge checkout could mislabel quality evidence as exact-head | Learning Content Studio | live unresolved PR #6 review verified against workflow | **Repaired test-first** with explicit PR-head checkout and SHA assertion | Exact-head workflow run proves checkout identity |
 | Line/branch coverage could miss uncovered statement regions | Learning Content Studio | live unresolved PR #6 review verified against workflow | **Repaired test-first** with per-`src/` statement/region, line, and branch enforcement | Exact-head coverage proves every production file 100% |
+| Unlinked production source could be absent from LLVM coverage evidence | Learning Content Studio | current PR #6 review verified that the gate enumerated only LLVM records | **Repaired test-first** by comparing the repository `src/**/*.rs` inventory with reported production paths and failing on any missing file | Exact-head workflow contract and coverage run prove inventory completeness before per-file thresholds |
 | Coverage report path collided with `cargo-llvm-cov` cleanup | Learning Content Studio | local execution failed after all tests with `No such file or directory` for `target/llvm-cov/coverage.json` | **Repaired test-first** by moving output to `target/coverage.json` | Exact-head workflow produces and parses the report |
 | Publication request ownership failed denied Clippy lint | Learning Content Studio | local `cargo clippy --all-targets -- -D warnings` at `src/lib.rs:452` | **Repaired** by consuming command fields internally while preserving the value-taking public API | Exact-head Clippy and regression suite |
 | Cargo resolution was not immutable | Learning Content Studio | `Cargo.lock` absent from PR #6 and downstream PR #7 | **Repaired test-first at the stack foundation** by committing the lockfile and requiring `--locked`; downstream restack must update it for native dependencies | Exact-head locked build on each stack layer |
@@ -87,7 +88,7 @@ Future authoritative relational objects use two-or-more-word `snake_case` names 
 - deterministic/hash-sensitive core logic remains Rust;
 - production consumes no synthetic demo data;
 - public Rust APIs use `missing_docs = "deny"` plus rustdoc warnings-as-errors;
-- CI requires an asserted exact-head checkout, rustfmt, locked Clippy `-D warnings`, locked all-target tests, and 100% per-production-file statement/region, line, and branch coverage from the committed resolution with nonzero production region and branch evidence;
+- CI requires an asserted exact-head checkout, rustfmt, locked Clippy `-D warnings`, locked all-target tests, complete `src/**/*.rs` presence in LLVM evidence, and 100% per-production-file statement/region, line, and branch coverage from the committed resolution with nonzero production region and branch evidence;
 - central exact-head Security/SAST/review evidence remains mandatory and cannot be replaced by repository-local green checks;
 - writer branches are re-fetched before mutation; stack updates use ordinary ancestry without force-push/destructive rebase.
 
