@@ -84,7 +84,7 @@ After the parent authority API advanced, the child was adapted on its existing w
 
 ## Coverage contract
 
-Repository CI runs rustfmt, Clippy with warnings denied, all-target tests, and rustdoc warnings-as-errors on `ubuntu-24.04`. Coverage uses pinned `cargo-llvm-cov` 0.9.0 plus exact `nightly-2026-08-30` branch instrumentation. The gate parses LLVM per-file summaries and requires each repository `src/` production file to have 100% line coverage and 100% branch coverage; test-only files cannot offset uncovered production paths. The gate also requires a nonzero production branch denominator.
+Repository CI runs rustfmt, locked-resolution Clippy with warnings denied, locked all-target tests, and locked rustdoc warnings-as-errors on `ubuntu-24.04`. Pull-request jobs explicitly check out and verify `github.event.pull_request.head.sha`; push jobs verify `github.sha`, so synthetic merge commits cannot substitute for exact-head evidence. Coverage uses pinned `cargo-llvm-cov` 0.9.0 plus exact `nightly-2026-08-30` branch instrumentation and the committed lockfile. The gate parses LLVM per-file summaries and requires each repository `src/` production file to have 100% statement/region, line, and branch coverage; test-only files cannot offset uncovered production paths. The gate also requires nonzero production region and branch denominators.
 
 ## Security and operability
 

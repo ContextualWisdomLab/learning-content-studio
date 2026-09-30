@@ -11,11 +11,12 @@ This baseline applies to the exact Git commit that contains it. GitHub PR/branch
 Live commercialization evidence at the last pre-write re-fetch:
 
 - repository is public, organization-owned, and `fork=false`;
-- the active organization ruleset `CWL Central required workflows` applies to the default branch and requires one approving review, resolved review threads, and central close-empty/OpenCode/merge-scheduler/security/Strix/SAST/Noema workflows; no admin bypass or ruleset weakening is used by this work;
-- PR #1 is open/Ready/mechanically mergeable at `e7977e5736b425e6221481934b25811ab27d7557`, but its exact-head central/repository workflows remain non-passing until queued execution and independent approval complete;
-- PR #6 is open/Ready/mechanically mergeable at `c51d1838f50fe758e63c1838f3cb1f8377a75fe7`. Its release-binding review defect is repaired and the review thread is resolved; Quality run `33571176737` remains pending, and its observed job had no allocated runner or executed steps;
-- PR #7 is non-destructively restacked on the current PR #6 head. Merge commit `291100ae3ae5432894288fea266122eac5ca8686` has both the child writer state and `c51d1838f50fe758e63c1838f3cb1f8377a75fe7` as parents, so no force-push or destructive rebase was used;
-- the restacked PR #7 source and tests use authority-backed admission and preserve native exact-byte finalization. Pre-baseline head `29fdaec8761149c4f20cf5bfc08a13a6fdb46131` was open/Ready/mechanically mergeable; Quality run `33571741116` was queued with `steps=[]`, `runner_id=null`, and therefore was not passing evidence. This baseline commit requires a fresh exact-head run after the write.
+- the active organization ruleset `CWL Central required workflows` applies to the default branch and requires one approving review, resolved review threads, and central close-empty/OpenCode/merge-scheduler/security/Strix/SAST/Noema workflows; no self-approval, admin bypass, or ruleset weakening is used by this work;
+- PR #1 is open/Ready/mechanically mergeable at `e7977e5736b425e6221481934b25811ab27d7557`; exact-head SAST Semgrep `33569943093` and Learning Content Studio Quality `33569943228` passed, while Security Scan `33569943004` failed closed because GitHub Dependency Review returned HTTP 403;
+- PR #6 is the first executable Publication Admission kernel and remains stacked on PR #1 at `c4388ca71f9c81d4731d3dff17033e535901cb3b`. Its authority and release-binding defects remain repaired, and its quality workflow now asserts the exact PR head, enforces statement/region plus line/branch coverage, avoids the `cargo-llvm-cov` output-path collision, and uses committed locked resolution;
+- release-binding regression commit `c8346a5fb1652c02a515b826f856a83e2072ae63` preceded production repair `f00ebc1523a682d35307ea4b14593378d1b8d190`; mismatched release identity or source hash therefore fails closed;
+- PR #7 previously preserved its native-byte delta in ordinary merge ancestry. This restack commit carries both the child writer state and PR #6 exact head `c4388ca71f9c81d4731d3dff17033e535901cb3b` as parents, without force-push or destructive rebase;
+- PR #7 source/tests continue to use authority-backed admission and exact-byte native finalization. Fresh exact-head repository and central checks are mandatory after this restack; predecessor runs do not transfer.
 
 ## Feature specification and ubiquitous language
 
@@ -55,11 +56,18 @@ Admission invariants:
 | --- | --- | --- | --- | --- |
 | Cached target compatibility evidence could authorize another release | Learning Content Studio | PR #6 review verified against source | **Repaired test-first** by `c8346a5f...` then `f00ebc15...`; review thread resolved | Fresh exact-head Quality + central review evidence |
 | Caller assertions could forge trusted compatibility | Learning Content Studio | earlier PR #6 review | **Repaired test-first** with authority ports and intent-only request | Preserve under exact-head regression suite |
-| Aggregate coverage could mask production gaps | Learning Content Studio | earlier PR #6 review | **Repaired** with per-`src/` line/branch enforcement | Exact-head coverage proves every production file 100% |
-| Native finalizer diverged from current admission authority API | Learning Content Studio | PR #7 stale stack/source compared with PR #6 `c51d...` | **Repaired** on existing writer branch; source/tests adapted and child non-destructively merged onto current parent | Fresh exact-head fmt/clippy/tests/coverage/rustdoc + review |
+| Synthetic merge checkout could mislabel quality evidence as exact-head | Learning Content Studio | PR #6 review verified against workflow | **Repaired test-first** with explicit PR-head checkout and SHA assertion | Exact-head workflow run proves checkout identity |
+| Line/branch coverage could miss uncovered statement regions | Learning Content Studio | PR #6 review verified against workflow | **Repaired test-first** with per-`src/` statement/region, line, and branch enforcement | Exact-head coverage proves every production file 100% |
+| Coverage report path collided with `cargo-llvm-cov` cleanup | Learning Content Studio | local execution failed after all tests with `No such file or directory` for `target/llvm-cov/coverage.json` | **Repaired test-first** by moving output to `target/coverage.json` | Exact-head workflow produces and parses the report |
+| Publication request ownership failed denied Clippy lint | Learning Content Studio | local `cargo clippy --all-targets -- -D warnings` at `src/lib.rs:452` | **Repaired** by consuming command fields internally while preserving the value-taking public API | Exact-head Clippy and regression suite |
+| Cargo resolution was not immutable | Learning Content Studio | `Cargo.lock` absent from PR #6 and downstream PR #7 | **Repaired test-first at the stack foundation** by committing the lockfile and requiring `--locked`; PR #7 restack updates it for native dependencies | Exact-head locked build on each stack layer |
+| Native finalizer diverged from current admission authority API | Learning Content Studio | earlier PR #7 stale stack/source | **Repaired** on the existing writer branch; source/tests adapted and child non-destructively merged onto current parent | Fresh exact-head fmt/clippy/tests/coverage/rustdoc + review |
+| Native digest projection failed denied Clippy lint | Learning Content Studio | restacked local `cargo clippy --locked --all-targets -- -D warnings` at `src/lib.rs:703` | **Repaired** with direct reference iteration and no behavior change | Exact-head Clippy and byte-vector regressions |
 | Parent foundation not protected-integrated | Learning Content Studio / governance | PR #1 `e7977e57...`; required workflows/approval incomplete | Open without bypass | Unchanged-head required workflows + independent approval + ordinary merge |
-| Central workflow execution unavailable/queued | ContextualWisdomLab/.github / GitHub Actions | PR #6 and pre-baseline PR #7 jobs observed with no runner/steps | Fail closed; no local green substitution | Runner allocation + exact-head central/repository checks |
+| Dependency Review availability/configuration | ContextualWisdomLab/.github / GitHub configuration | exact-head PR #1 dependency compare HTTP 403; canonical `.github#810` | Fail closed | Authorized control-plane repair + exact-head canary |
+| Central workflow execution unavailable/queued | ContextualWisdomLab/.github / GitHub Actions | predecessor PR #6/#7 jobs observed with no runner/steps | Fail closed; no local green substitution | Runner allocation + exact-head central/repository checks |
 | Stacked central review | ContextualWisdomLab/.github | organization ruleset requires OpenCode and one approval on protected default integration | No self-approval or local substitute | Central stacked review and ordinary protected integration |
+| Native byte finalization integration | Learning Content Studio | PR #7 owns exact-byte receipt evidence | Restacked on current admission/quality foundation | Exact-head validation and review |
 | Shared native xAPI 2.0 contract not released | `ContextualWisdomLab/learning-interoperability-contracts` | renderer explicitly dependency-gated | Open upstream | Release true owner before native renderer conformance claim |
 | No native renderer/package generator | Learning Content Studio | finalizer consumes already-emitted bytes | Open | Deterministic renderer/manifest builder against released shared contract + byte-identical fixtures |
 | No immutable persistence | Learning Content Studio | no schema/migration/repository | Open | 3NF append-only `content_release`/`publication_receipt` authority and audit transactions |
@@ -78,7 +86,7 @@ Future authoritative relational objects use two-or-more-word `snake_case` names 
 - deterministic/hash-sensitive core logic remains Rust and SHA-256 uses pinned RustCrypto `sha2 = 0.11.0`;
 - production consumes no synthetic demo data;
 - public Rust APIs use `missing_docs = "deny"` plus rustdoc warnings-as-errors;
-- CI requires rustfmt, Clippy `-D warnings`, all-target tests, and 100% per-production-file line/branch coverage with nonzero production branch evidence;
+- CI requires an asserted exact-head checkout, rustfmt, locked Clippy `-D warnings`, locked all-target tests, and 100% per-production-file statement/region, line, and branch coverage from the committed resolution with nonzero production region and branch evidence;
 - central exact-head required workflows and independent review remain mandatory and cannot be replaced by predecessor-head or repository-local evidence;
 - writer branches are re-fetched before mutation; stack repair uses ordinary ancestry and a non-force ref update.
 
