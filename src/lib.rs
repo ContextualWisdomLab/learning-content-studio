@@ -6,6 +6,12 @@
 
 use sha2::{Digest, Sha256};
 
+mod publication_receipt_store;
+
+pub use publication_receipt_store::{
+    FilePublicationReceiptStore, PublicationReceiptStoreError, PublicationReceiptWrite,
+};
+
 /// A target-specific publication path.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PublisherTarget {

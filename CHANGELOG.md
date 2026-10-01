@@ -16,6 +16,8 @@
 - `CompatibilityReleaseIdentity` binds target-validation evidence to the exact immutable `content_release_id` and `source_hash` it evaluated.
 - Native-web byte finalization computes exact release, artifact, and build-manifest SHA-256 evidence with an opaque `NativeWebPublicationReceipt`.
 - Byte-finalized receipts preserve release-approval and target-validation evidence identities across the admission-to-publication boundary.
+- `FilePublicationReceiptStore` durably appends exact canonical native-web receipt bytes with atomic no-overwrite installation, idempotent replay, corruption detection, and parent/store directory fsync.
+- Receipt-store regressions cover process reopen, same-identity conflict, stale/orphan temp recovery, missing parent, corruption/tampering, I/O failure, and deterministic injected commit/sync failures.
 
 ### Changed
 

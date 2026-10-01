@@ -1,8 +1,8 @@
-# Technical requirements — Publication Admission and Native Byte Finalization
+# Technical requirements — Publication Admission, Native Byte Finalization, and Receipt Persistence
 
 ## Scope
 
-This TRD covers the first executable Learning Content Studio publication trust chain. Publication Admission evaluates caller intent for one immutable release/target only after obtaining authoritative release/approval evidence and release-bound target-compatibility evidence. Native-web byte finalization then verifies the admitted source identity against exact immutable release bytes and records exact emitted artifact/build-manifest identities. Rendering, durable persistence, network services, deployment, and buyer-facing UI remain outside this slice.
+This TRD covers the first executable Learning Content Studio publication trust chain. Publication Admission evaluates caller intent for one immutable release/target only after obtaining authoritative release/approval evidence and release-bound target-compatibility evidence. Native-web byte finalization then verifies the admitted source identity against exact immutable release bytes and records exact emitted artifact/build-manifest identities. A bounded filesystem repository durably preserves those exact canonical receipt bytes. Rendering, authoritative release/database persistence, network services, deployment, and buyer-facing UI remain outside this slice.
 
 ## Runtime and API
 
@@ -24,6 +24,10 @@ finalize_native_web_publication(
     build_manifest_bytes,
     validation_receipt_ids,
 ) -> Result<NativeWebPublicationReceipt, NativeWebPublicationError>
+
+FilePublicationReceiptStore::open(receipt_directory)
+FilePublicationReceiptStore::persist(&NativeWebPublicationReceipt)
+FilePublicationReceiptStore::load(content_release_id, publisher_contract_id)
 ```
 
 `PublicationRequest` contains only caller intent: `content_release_id` and `PublisherTarget`. It has no caller-controlled approval boolean, source hash, locale, publisher contract/version/standard, or blocker vector.
@@ -60,7 +64,13 @@ No mutable authoring state, caller approval claim, caller blocker omission, wall
 7. canonicalizes receipt `source_hash` to the lowercase SHA-256 identity recomputed from release bytes while preserving `release_approval_evidence_id` and `target_validation_evidence_id`;
 8. creates an opaque `NativeWebPublicationReceipt` with deterministic field and receipt-ID ordering.
 
-The finalizer does not render learning content, validate an xAPI profile, persist or upload artifacts, or establish interoperability certification.
+The finalizer does not render learning content, validate an xAPI profile, upload artifacts, or establish interoperability certification. Receipt persistence is a separate repository operation after finalization.
+
+## Durable receipt repository
+
+`FilePublicationReceiptStore` stores the exact `NativeWebPublicationReceipt::canonical_json()` bytes under the composite identity `content_release_id` plus `publisher_contract_id`. It writes and fsyncs a hidden temporary record, atomically installs the final record with a same-filesystem hard link, removes the temporary name, and fsyncs the store directory. Creating a new store leaf also fsyncs its already-provisioned parent directory. Identical replay fsyncs the directory before returning `AlreadyPresent`; a different payload for the same identity fails with `ConflictingReceipt` and cannot overwrite evidence.
+
+Each record carries a version magic, SHA-256 identity digest, SHA-256 payload digest, and exact canonical payload. Reads reject truncated, wrong-version, wrong-identity, and payload-tampered records as `CorruptRecord`. Hidden orphan temporary files are never readable as committed receipts. A colliding PID/sequence candidate is never deleted because another PID namespace may own it; the writer atomically reserves the next sequence candidate instead.
 
 ## Deterministic result and traceability
 
@@ -73,6 +83,8 @@ The finalizer does not render learning content, validate an xAPI profile, persis
 Admission fails closed with typed errors for unavailable release/compatibility evidence, release/target authority identity mismatch, compatibility evidence bound to another release or source hash, unapproved release, malformed source identity, cross-target contract, missing authority fields, and duplicate blockers. A caller cannot manufacture compatibility by setting `approved=true`, supplying an empty blocker vector, or replaying cached target evidence for another immutable release.
 
 Native finalization fails closed with typed `NativeWebPublicationError` values for incompatible admission, wrong publisher contract, source-byte mismatch, empty artifact/build-manifest bytes, and empty or duplicate validation-receipt identities.
+
+Receipt persistence fails closed with typed I/O, corruption, and same-identity conflict errors. A missing receipt is distinct from an unreadable or corrupt receipt. No error path promotes bytes into release approval, publication authority, or interoperability evidence.
 
 ## Test-first and stack evidence
 
@@ -88,8 +100,8 @@ Repository CI runs rustfmt, locked-resolution Clippy with warnings denied, locke
 
 ## Security and operability
 
-The crate forbids unsafe Rust and has no filesystem, secret, or network handling in these domain services. RustCrypto `sha2` is the only production dependency added by native finalization and remains subject to protected Dependency Review, SAST, and security evidence before integration. Authority-port adapters are privileged boundaries and require least privilege/auditability when persistence or remote services arrive. A missing or unavailable dependency-security signal is fail-closed, never translated into green.
+The crate forbids unsafe Rust and has no secret or network handling. RustCrypto `sha2` remains the only production dependency. The receipt directory is an operator-provisioned, same-filesystem, privately writable trust boundary; the repository detects corruption but does not defend against a privileged writer that can replace files and recompute hashes. It stores receipt evidence only, never release/artifact bytes or authorization state. Authority-port adapters and filesystem provisioning require least privilege, auditability, retention, backup, and recovery controls before deployment. A missing or unavailable dependency-security signal is fail-closed, never translated into green.
 
 ## Future boundaries
 
-A complete native renderer remains gated on a released shared xAPI 2.0 contract from `ContextualWisdomLab/learning-interoperability-contracts`. Durable persistence follows with 3NF two-or-more-word `snake_case` objects, append-only immutable `content_release` / `publication_receipt` authority, explicit transaction/audit semantics, and item-level UPSERT only for mutable indexes with tested idempotency. A service/API boundary is introduced only when durable storage or remote publishing requires one; then async handling, compose deployability, observability/recovery, and k6 evidence become mandatory.
+A complete native renderer remains gated on a released shared xAPI 2.0 contract from `ContextualWisdomLab/learning-interoperability-contracts`. The file repository is not the future authoritative relational store: 3NF two-or-more-word `snake_case` objects, append-only immutable `content_release` / `publication_receipt` authority, explicit transaction/audit semantics, retention/resource limits, and item-level UPSERT only for mutable indexes remain open. A service/API boundary is introduced only when remote persistence or publishing requires one; then async handling, compose deployability, observability/recovery, and k6 evidence become mandatory.

@@ -23,7 +23,9 @@ Two security-sensitive authority ports are anti-corruption boundaries:
 
 `evaluate_publication` cross-binds release evidence to caller intent and target evidence to both the requested target and exact immutable release identity/hash. Cached compatibility evidence from another release or source identity fails closed before contract/blocker admission. The service validates required identities and contract ownership, canonicalizes blockers, and creates opaque `PublicationOutcome` authority.
 
-For native web, `finalize_native_web_publication` is a separate byte-owning domain service after rendering. It accepts only an opaque compatible native outcome, verifies the admitted source identity against exact immutable release bytes, hashes the exact emitted artifact and build-manifest bytes, canonicalizes validation-receipt identities, preserves release-approval and target-validation traceability, and returns an opaque `NativeWebPublicationReceipt`. It does not render, upload, persist, or claim xAPI conformance.
+For native web, `finalize_native_web_publication` is a separate byte-owning domain service after rendering. It accepts only an opaque compatible native outcome, verifies the admitted source identity against exact immutable release bytes, hashes the exact emitted artifact and build-manifest bytes, canonicalizes validation-receipt identities, preserves release-approval and target-validation traceability, and returns an opaque `NativeWebPublicationReceipt`. It does not render, upload, or claim xAPI conformance.
+
+`FilePublicationReceiptStore` is a repository adapter for exact canonical receipt evidence after finalization. It owns no release approval or target-validation decision. Its append-only release/contract identity, atomic no-overwrite link, content digests, directory fsync, and fail-closed replay behavior preserve evidence across process restart while an authoritative relational aggregate remains future work.
 
 The publisher boundary remains an ACL: xAPI/cmi5/SCORM/Common Cartridge/QTI details may not leak into canonical authoring entities. Shared schemas are consumed from released `ContextualWisdomLab/learning-interoperability-contracts` contracts, never copied locally.
 
@@ -72,6 +74,7 @@ Downstream LMS/LRS/assessment systems consume released projections/contracts and
 - `PublicationMetadata` — validated release/target authority traceability;
 - `PublicationOutcome` — opaque admission result;
 - `NativeWebPublicationReceipt` — opaque exact-byte publication evidence;
+- `FilePublicationReceiptStore` — durable append-only repository for exact canonical receipt bytes;
 - `evaluate_publication` — authority-backed admission domain service;
 - `finalize_native_web_publication` — native byte-finalization domain service.
 
@@ -79,4 +82,4 @@ Future durable domain events (`content_release_approved`, `publication_admitted`
 
 ## Persistence direction
 
-No database is introduced by this slice. Future authoritative relational objects use two-or-more-word `snake_case` names and 3NF. Mutable authoring transactions and immutable release/publication transactions stay separate. `content_release`, `release_component`, `release_asset`, `release_approval`, and `publication_receipt` are append-only where they represent immutable authority. Item-level UPSERT is reserved for explicitly mutable indexes with tested idempotency keys. Read/write separation or materialized views require measured contention/load evidence.
+No database is introduced by this slice. The filesystem repository is bounded evidence storage, not authoritative `content_release` state and not an audit transaction ledger. Future authoritative relational objects use two-or-more-word `snake_case` names and 3NF. Mutable authoring transactions and immutable release/publication transactions stay separate. `content_release`, `release_component`, `release_asset`, `release_approval`, and `publication_receipt` are append-only where they represent immutable authority. Item-level UPSERT is reserved for explicitly mutable indexes with tested idempotency keys. Read/write separation or materialized views require measured contention/load evidence.

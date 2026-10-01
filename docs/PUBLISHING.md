@@ -90,7 +90,13 @@ build_manifest_hash
 validation_receipt_ids
 ```
 
-The finalizer does **not** render content, validate an xAPI profile, persist/upload artifacts, or certify interoperability. A complete native renderer remains gated on a released shared xAPI 2.0 contract from `ContextualWisdomLab/learning-interoperability-contracts`.
+The finalizer does **not** render content, validate an xAPI profile, upload artifacts, or certify interoperability. A complete native renderer remains gated on a released shared xAPI 2.0 contract from `ContextualWisdomLab/learning-interoperability-contracts`.
+
+## Receipt evidence persistence
+
+After finalization, `FilePublicationReceiptStore` can durably append the exact canonical receipt bytes for one `content_release_id` and publisher-contract identity. Identical replay is idempotent; different bytes for the same identity fail closed. The store uses atomic no-overwrite installation and fsyncs both a new store parent entry and committed store entries. Corrupt, wrong-version, wrong-identity, or tampered records never load as evidence.
+
+This adapter assumes an operator-provisioned, same-filesystem, privately writable directory. It is not the authoritative release database, an artifact store, an audit ledger, a defense against a privileged filesystem writer, or proof of target interoperability.
 
 ## xAPI-version-specific contracts
 

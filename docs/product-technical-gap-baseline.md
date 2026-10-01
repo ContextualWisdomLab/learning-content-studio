@@ -12,11 +12,11 @@ Live commercialization evidence at the last pre-write re-fetch:
 
 - repository is public, organization-owned, and `fork=false`;
 - the active organization ruleset `CWL Central required workflows` applies to the default branch and requires one approving review, resolved review threads, and central close-empty/OpenCode/merge-scheduler/security/Strix/SAST/Noema workflows; no self-approval, admin bypass, or ruleset weakening is used by this work;
-- PR #1 is open/Ready/mechanically mergeable at `e7977e5736b425e6221481934b25811ab27d7557`; exact-head SAST Semgrep `33569943093` and Learning Content Studio Quality `33569943228` passed, while Security Scan `33569943004` failed closed because GitHub Dependency Review returned HTTP 403;
-- PR #6 is the first executable Publication Admission kernel and remains stacked on PR #1 at `c4388ca71f9c81d4731d3dff17033e535901cb3b`. Its authority and release-binding defects remain repaired, and its quality workflow now asserts the exact PR head, enforces statement/region plus line/branch coverage, avoids the `cargo-llvm-cov` output-path collision, and uses committed locked resolution;
+- PR #1 is open/Draft/mechanically mergeable at `e7977e5736b425e6221481934b25811ab27d7557`; that head is a tree-identical evidence refresh with no source delta over its predecessor. Exact-head SAST Semgrep `33569943093` and Learning Content Studio Quality `33569943228` passed, while Security Scan `33569943004` failed closed because GitHub Dependency Review returned HTTP 403;
+- PR #6 is the first executable Publication Admission kernel and remains open/Draft at `d8128b44a4cc7775453f839bf2d1e2e0d709d8f9`, stacked on the bootstrap writer branch. Its authority and release-binding defects remain repaired, and its quality workflow asserts the exact PR head, enforces statement/region plus line/branch coverage, avoids the `cargo-llvm-cov` output-path collision, and uses committed locked resolution;
 - release-binding regression commit `c8346a5fb1652c02a515b826f856a83e2072ae63` preceded production repair `f00ebc1523a682d35307ea4b14593378d1b8d190`; mismatched release identity or source hash therefore fails closed;
-- PR #7 previously preserved its native-byte delta in ordinary merge ancestry. This restack commit carries both the child writer state and PR #6 exact head `c4388ca71f9c81d4731d3dff17033e535901cb3b` as parents, without force-push or destructive rebase;
-- PR #7 source/tests continue to use authority-backed admission and exact-byte native finalization. Fresh exact-head repository and central checks are mandatory after this restack; predecessor runs do not transfer.
+- PR #7 remains open/Draft at pre-write head `480903fa5ccf017f1d0267ec57f39ba742c4512b` on exact PR #6 head `d8128b44a4cc7775453f839bf2d1e2e0d709d8f9`; existing ancestry preserves its native-byte delta without force-push or destructive rebase;
+- this successor commit adds bounded durable canonical-receipt evidence on the same PR #7 writer branch. Fresh exact-head repository and central checks are mandatory after publication; predecessor runs do not transfer.
 
 ## Feature specification and ubiquitous language
 
@@ -28,6 +28,7 @@ Live commercialization evidence at the last pre-write re-fetch:
 - **publication admission**: deterministic cross-binding of caller intent, immutable release authority, and release-bound target validation;
 - **publication outcome**: opaque compatible/incompatible result preserving release and target authority traceability;
 - **native-web publication receipt**: opaque downstream evidence after exact release/artifact/manifest hashing and validation-receipt canonicalization.
+- **publication receipt store**: append-only repository for exact canonical receipt evidence keyed by release and publisher contract; it is not release approval, artifact storage, or relational audit authority.
 
 Admission invariants:
 
@@ -70,21 +71,23 @@ Admission invariants:
 | Central workflow execution unavailable/queued | ContextualWisdomLab/.github / GitHub Actions | predecessor PR #6/#7 jobs observed with no runner/steps | Fail closed; no local green substitution | Runner allocation + exact-head central/repository checks |
 | Stacked central review | ContextualWisdomLab/.github | organization ruleset requires OpenCode and one approval on protected default integration | No self-approval or local substitute | Central stacked review and ordinary protected integration |
 | Native byte finalization integration | Learning Content Studio | PR #7 owns exact-byte receipt evidence | Restacked on current admission/quality foundation | Exact-head validation and review |
+| Receipt evidence vanished on process restart | Learning Content Studio | PR #7 file repository tests and exact local branch-coverage report | **Repaired in bounded scope** with atomic no-overwrite install, parent/store fsync, exact replay, conflict/corruption failure, and orphan recovery; ADR 0003 remains Proposed until integration | Fresh exact-head fmt/Clippy/tests/100% coverage/rustdoc + protected review |
 | Shared native xAPI 2.0 contract not released | `ContextualWisdomLab/learning-interoperability-contracts` | renderer explicitly dependency-gated | Open upstream | Release true owner before native renderer conformance claim |
 | No native renderer/package generator | Learning Content Studio | finalizer consumes already-emitted bytes | Open | Deterministic renderer/manifest builder against released shared contract + byte-identical fixtures |
-| No immutable persistence | Learning Content Studio | no schema/migration/repository | Open | 3NF append-only `content_release`/`publication_receipt` authority and audit transactions |
+| No authoritative immutable release/audit persistence | Learning Content Studio | bounded filesystem repository stores receipt evidence only; no schema/migration/transaction ledger | Open | 3NF append-only `content_release`/`publication_receipt` authority, audit transactions, retention/resource limits, recovery evidence |
 | No buyer-facing authoring UX | Learning Content Studio | no app/UI/Storybook/Figma evidence | Open | Review -> accessibility/rights -> approval -> release workflow with accessibility/error-recovery evidence |
 | No operability/deployment baseline | Learning Content Studio | no service/container/runtime | Open | Add when remote persistence/publishing requires it; then compose/observability/recovery/k6 |
 | No public product release | Learning Content Studio | no protected release/tag/package | Open | Protected integration, SBOM/provenance/reproducibility/API maturity |
 
 ## Persistence and security guardrails
 
-Future authoritative relational objects use two-or-more-word `snake_case` names and 3NF. `content_release`, `release_component`, `release_asset`, `release_approval`, and `publication_receipt` are append-only where immutable. Item-level UPSERT is allowed only for explicitly mutable indexes with tested idempotency keys. Authority-port adapters are privileged security boundaries and require least privilege, auditability, retention, encryption, and recovery evidence appropriate to CSAP/SOC 2 design goals. Current kernels require no PII; fixtures/docs use no real persons/institutions.
+The current file repository stores exact canonical receipt evidence only. It requires an operator-provisioned, same-filesystem, privately writable directory; digest checks detect corruption but not a privileged writer that can recompute them. Future authoritative relational objects use two-or-more-word `snake_case` names and 3NF. `content_release`, `release_component`, `release_asset`, `release_approval`, and `publication_receipt` are append-only where immutable. Item-level UPSERT is allowed only for explicitly mutable indexes with tested idempotency keys. Authority-port adapters are privileged security boundaries and require least privilege, auditability, retention, encryption, capacity limits, and recovery evidence appropriate to CSAP/SOC 2 design goals. Current kernels require no PII; fixtures/docs use no real persons/institutions.
 
 ## Verification matrix
 
 - release-binding trust repair is test-first: `c8346a5fb1652c02a515b826f856a83e2072ae63` establishes release/source mismatch expectations before production `f00ebc1523a682d35307ea4b14593378d1b8d190`;
 - native byte-finalization behavior retains its earlier test-first evidence (`2534b18c...`; digest-case regression `f0ac99ce...` before `084aa228...`) and is now adapted to authority ports without dropping edge cases;
+- receipt persistence was test-first for write/reopen/read exactness, idempotent and conflicting replay, and interrupted-write recovery; review-driven regressions cover parent/replay directory fsync, PID-reuse orphan collision, corruption, missing/unreadable storage, and deterministic commit/sync failure;
 - deterministic/hash-sensitive core logic remains Rust and SHA-256 uses pinned RustCrypto `sha2 = 0.11.0`;
 - production consumes no synthetic demo data;
 - public Rust APIs use `missing_docs = "deny"` plus rustdoc warnings-as-errors;
@@ -94,4 +97,4 @@ Future authoritative relational objects use two-or-more-word `snake_case` names 
 
 ## Next bounded commercialization slice
 
-First re-establish exact-head checks/review for PRs #1, #6, and the restacked #7, integrating them only through ordinary ruleset-compliant merges. In parallel, the highest-value product gaps are (1) immutable append-only release/publication receipt persistence with explicit evidence/audit transaction identities and (2) releasing the shared native xAPI 2.0 contract in its true owner so Learning Content Studio can implement a conformant renderer without duplicating ecosystem authority.
+First re-establish exact-head checks/review for PRs #1, #6, and #7, integrating them only through ordinary ruleset-compliant merges. In parallel, the highest-value product gaps are (1) authoritative 3NF append-only release/publication audit transactions with retention/resource/recovery evidence and (2) releasing the shared native xAPI 2.0 contract in its true owner so Learning Content Studio can implement a conformant renderer without duplicating ecosystem authority.
