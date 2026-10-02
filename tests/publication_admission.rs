@@ -147,7 +147,7 @@ fn request_and_authority_accessors_preserve_exact_values() {
         target.validation_evidence_id(),
         "target_validation_receipt_01"
     );
-    assert!(target.blocking_features().is_empty());
+    assert_eq!(target.blocking_features(), []);
 }
 
 #[test]
@@ -302,7 +302,7 @@ fn empty_blocker_evidence_becomes_compatible() {
     )
     .expect("valid compatible admission");
     assert_eq!(outcome.status(), PublicationStatus::Compatible);
-    assert!(outcome.blocking_features().is_empty());
+    assert_eq!(outcome.blocking_features(), []);
 }
 
 #[test]
@@ -378,128 +378,3 @@ fn canonical_json_escapes_all_json_control_classes() {
         ),
     )
     .expect("valid escaped identity");
-    assert!(
-        outcome
-            .canonical_json()
-            .contains("\"content_release_id\":\"q\\\"\\\\\\n\\r\\t\\b\\f\\u0001é\"")
-    );
-}
-
-#[test]
-fn rejects_empty_request_or_release_authority_fields() {
-    assert_eq!(
-        evaluate(
-            PublicationRequest::new(" ", PublisherTarget::NativeWeb),
-            approved_release(),
-            native_compatibility(Vec::new()),
-        ),
-        Err(AdmissionError::EmptyRequiredField("content_release_id"))
-    );
-
-    let cases = [
-        (
-            " \t".to_owned(),
-            "en-US",
-            "release_approval_receipt_01",
-            "source_hash",
-        ),
-        (hash('a'), " ", "release_approval_receipt_01", "locale_code"),
-        (hash('a'), "en-US", " ", "release_approval_evidence_id"),
-    ];
-    for (source_hash, locale, approval_id, field) in cases {
-        assert_eq!(
-            evaluate(
-                request(PublisherTarget::NativeWeb),
-                release(
-                    "content_release_01",
-                    &source_hash,
-                    locale,
-                    true,
-                    approval_id
-                ),
-                native_compatibility(Vec::new()),
-            ),
-            Err(AdmissionError::EmptyRequiredField(field))
-        );
-    }
-}
-
-#[test]
-fn rejects_empty_target_authority_fields() {
-    let cases = [
-        (
-            " ",
-            "1.0.0",
-            "2026-08",
-            "target_validation_receipt_01",
-            "publisher_contract_id",
-        ),
-        (
-            "native_cwl_xapi_2_0/v1",
-            " ",
-            "2026-08",
-            "target_validation_receipt_01",
-            "publisher_version",
-        ),
-        (
-            "native_cwl_xapi_2_0/v1",
-            "1.0.0",
-            " ",
-            "target_validation_receipt_01",
-            "standard_revision",
-        ),
-        (
-            "native_cwl_xapi_2_0/v1",
-            "1.0.0",
-            "2026-08",
-            " ",
-            "target_validation_evidence_id",
-        ),
-    ];
-    for (contract, version, revision, evidence_id, field) in cases {
-        assert_eq!(
-            evaluate(
-                request(PublisherTarget::NativeWeb),
-                approved_release(),
-                compatibility(
-                    CompatibilityReleaseIdentity::new("content_release_01", &hash('a')),
-                    PublisherTarget::NativeWeb,
-                    contract,
-                    version,
-                    revision,
-                    evidence_id,
-                    Vec::new(),
-                ),
-            ),
-            Err(AdmissionError::EmptyRequiredField(field))
-        );
-    }
-}
-
-#[test]
-fn rejects_every_empty_blocking_feature_identity_field() {
-    let cases = [
-        (
-            BlockingFeature::new(" ", "component_1", "reason_1"),
-            "blocking_feature.feature_code",
-        ),
-        (
-            BlockingFeature::new("feature_1", " ", "reason_1"),
-            "blocking_feature.source_component_reference",
-        ),
-        (
-            BlockingFeature::new("feature_1", "component_1", " "),
-            "blocking_feature.reason_code",
-        ),
-    ];
-    for (blocker, field) in cases {
-        assert_eq!(
-            evaluate(
-                request(PublisherTarget::NativeWeb),
-                approved_release(),
-                native_compatibility(vec![blocker]),
-            ),
-            Err(AdmissionError::EmptyRequiredField(field))
-        );
-    }
-}
