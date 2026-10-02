@@ -147,7 +147,7 @@ fn request_and_authority_accessors_preserve_exact_values() {
         target.validation_evidence_id(),
         "target_validation_receipt_01"
     );
-    assert!(target.blocking_features().is_empty());
+    assert_eq!(target.blocking_features(), []);
 }
 
 #[test]
@@ -302,7 +302,7 @@ fn empty_blocker_evidence_becomes_compatible() {
     )
     .expect("valid compatible admission");
     assert_eq!(outcome.status(), PublicationStatus::Compatible);
-    assert!(outcome.blocking_features().is_empty());
+    assert_eq!(outcome.blocking_features(), []);
 }
 
 #[test]
