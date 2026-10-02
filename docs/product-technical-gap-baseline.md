@@ -95,7 +95,7 @@ The current file repository stores exact canonical receipt evidence only. It req
 - public Rust APIs use `missing_docs = "deny"` plus rustdoc warnings-as-errors;
 - CI requires an asserted exact-head checkout, rustfmt, locked Clippy `-D warnings`, locked all-target tests, complete `src/**/*.rs` presence in LLVM evidence, and 100% per-production-file statement/region, line, and branch coverage from the committed resolution with nonzero production region and branch evidence;
 - central exact-head required workflows, Security/SAST, and independent review remain mandatory and cannot be replaced by predecessor-head or repository-local evidence;
-- local verification after the stack repair passed rustfmt, 46 Rust tests, locked Clippy with warnings denied, locked rustdoc, and `git diff --check`; hosted exact-head evidence is still required;
+- local verification after the stack repair and baseline contract passed rustfmt, 47 Rust tests, locked Clippy with warnings denied, locked rustdoc, and `git diff --check`; hosted exact-head evidence is still required;
 - writer branches are re-fetched before mutation; stack repair uses ordinary ancestry and a non-force ref update without destructive rebase.
 
 ## Next bounded commercialization slice
