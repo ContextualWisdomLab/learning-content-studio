@@ -1,6 +1,7 @@
 //! Regression contracts for exact-head and production coverage CI evidence.
 
 const QUALITY_WORKFLOW: &str = include_str!("../.github/workflows/quality.yml");
+const GAP_BASELINE: &str = include_str!("../docs/product-technical-gap-baseline.md");
 
 #[test]
 fn quality_checkout_is_bound_to_the_pull_request_head() {
@@ -33,4 +34,11 @@ fn rust_dependency_resolution_is_locked() {
     assert!(QUALITY_WORKFLOW.contains("cargo test --locked --all-targets"));
     assert!(QUALITY_WORKFLOW.contains("cargo doc --locked --no-deps"));
     assert!(QUALITY_WORKFLOW.contains("\"llvm-cov\",\n                  \"--locked\""));
+}
+
+#[test]
+fn gap_baseline_preserves_the_current_stack_order_and_evidence_boundary() {
+    assert!(GAP_BASELINE.contains("PR #1 -> PR #6 -> PR #7"));
+    assert!(GAP_BASELINE.contains("ordinary merge"));
+    assert!(GAP_BASELINE.contains("predecessor workflow/review evidence never transfers"));
 }
