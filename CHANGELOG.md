@@ -34,3 +34,5 @@
 - Cargo dependency resolution is committed, while generated `target/` artifacts are excluded from repository state.
 - Native SHA-256 hex projection uses direct reference iteration and satisfies the denied Clippy contract.
 - Exact-head checkout assertion and repository-wide tracked-whitespace validation.
+- ADR 0001 remains Proposed until ordinary protected integration.
+- ADR 0002 remains Proposed while its implementation PR is open.

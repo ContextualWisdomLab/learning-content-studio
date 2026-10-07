@@ -1,6 +1,6 @@
 # ADR 0002: Native-web byte finalization is a separate trust boundary
 
-- Status: Accepted
+- Status: Proposed
 - Date: 2026-09-02
 
 ## Context

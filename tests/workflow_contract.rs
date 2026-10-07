@@ -2,6 +2,8 @@
 
 const QUALITY_WORKFLOW: &str = include_str!("../.github/workflows/quality.yml");
 const GAP_BASELINE: &str = include_str!("../docs/product-technical-gap-baseline.md");
+const ADR_0001: &str = include_str!("../docs/adr/0001-authoring-release-boundary.md");
+const ADR_0002: &str = include_str!("../docs/adr/0002-native-web-byte-finalization.md");
 
 #[test]
 fn quality_checkout_is_bound_to_the_pull_request_head() {
@@ -19,6 +21,14 @@ fn tracked_files_are_checked_for_whitespace_regressions() {
     assert!(QUALITY_WORKFLOW.contains(
         "git diff --check \"$(git hash-object -t tree /dev/null)\" HEAD"
     ));
+}
+
+#[test]
+fn open_stack_decisions_remain_proposed() {
+    assert!(ADR_0001.contains("\nProposed\n"));
+    assert!(ADR_0002.contains("- Status: Proposed"));
+    assert!(!ADR_0001.contains("\nAccepted\n"));
+    assert!(!ADR_0002.contains("- Status: Accepted"));
 }
 
 #[test]
