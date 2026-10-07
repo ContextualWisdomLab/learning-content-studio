@@ -8,3 +8,4 @@
 - Deterministic publication contract and publisher targets.
 - Accessibility and learning-content standards traceability.
 - Repository development rules.
+- Exact-head checkout assertion and repository-wide tracked-whitespace validation.
