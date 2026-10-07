@@ -33,3 +33,4 @@
 - Publication admission now consumes the request command fields it accepts by value, satisfying the denied Clippy ownership lint without changing the public call contract.
 - Cargo dependency resolution is committed, while generated `target/` artifacts are excluded from repository state.
 - Native SHA-256 hex projection uses direct reference iteration and satisfies the denied Clippy contract.
+- Exact-head checkout assertion and repository-wide tracked-whitespace validation.

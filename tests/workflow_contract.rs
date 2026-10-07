@@ -15,6 +15,13 @@ fn quality_checkout_is_bound_to_the_pull_request_head() {
 }
 
 #[test]
+fn tracked_files_are_checked_for_whitespace_regressions() {
+    assert!(QUALITY_WORKFLOW.contains(
+        "git diff --check \"$(git hash-object -t tree /dev/null)\" HEAD"
+    ));
+}
+
+#[test]
 fn production_coverage_requires_statement_regions() {
     assert!(QUALITY_WORKFLOW.contains("Path(\"target/coverage.json\")"));
     assert!(QUALITY_WORKFLOW.contains("summary.get(\"regions\")"));
@@ -41,4 +48,6 @@ fn gap_baseline_preserves_the_current_stack_order_and_evidence_boundary() {
     assert!(GAP_BASELINE.contains("PR #1 -> PR #6 -> PR #7"));
     assert!(GAP_BASELINE.contains("ordinary merge"));
     assert!(GAP_BASELINE.contains("predecessor workflow/review evidence never transfers"));
+    assert!(GAP_BASELINE.contains("whole-tree `git diff --check`"));
+    assert!(GAP_BASELINE.contains(".github#2356"));
 }

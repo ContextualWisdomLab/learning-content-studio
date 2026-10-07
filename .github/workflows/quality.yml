@@ -27,6 +27,8 @@ jobs:
         env:
           EXPECTED_CHECKOUT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_CHECKOUT_SHA"
+      - name: Verify tracked whitespace contract
+        run: git diff --check "$(git hash-object -t tree /dev/null)" HEAD
       - name: Validate product contract
         shell: python3 {0}
         run: |
