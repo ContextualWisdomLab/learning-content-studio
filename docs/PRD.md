@@ -16,12 +16,12 @@ Learning Content Studio gives learning teams one authoritative place to author, 
 
 ## Current commercial slice
 
-The executable `Publication Admission` kernel is the first production surface. It supports two distinct contract boundaries:
+The executable publication trust kernel is the first production surface. It supports two distinct contract boundaries:
 
 - native CWL web activity → `native_cwl_xapi_2_0/v1`;
 - cmi5 Quartz → `cmi5_quartz_xapi_1_0_3/v1`.
 
-It does not yet emit packages and therefore makes no runtime-conformance or certification claim.
+It now admits authority-backed publication, finalizes exact native-web byte evidence, and can durably preserve canonical receipt evidence across process restart. It does not yet emit packages, persist authoritative release aggregates, or make a runtime-conformance or certification claim.
 
 ## Product invariants
 
@@ -40,4 +40,4 @@ A buyer-facing release requires protected-branch integration, exact-head tests/s
 
 ## Deferred capabilities
 
-Immutable persistence, actual native-web/cmi5 artifact generation, SCORM/Common Cartridge/QTI 3.0 reference adapters, authoring UI, content storage, deployment, load testing, and CEFR task/rubric specialization remain explicit gaps tracked in `docs/product-technical-gap-baseline.md`.
+Authoritative 3NF release/audit persistence, actual native-web/cmi5 artifact generation, SCORM/Common Cartridge/QTI 3.0 reference adapters, authoring UI, content storage, deployment, load testing, and CEFR task/rubric specialization remain explicit gaps tracked in `docs/product-technical-gap-baseline.md`.
