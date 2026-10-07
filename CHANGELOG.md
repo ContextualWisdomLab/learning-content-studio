@@ -27,3 +27,4 @@
 - Coverage output no longer uses `cargo-llvm-cov`'s self-cleaned `target/llvm-cov/` work directory.
 - Publication admission now consumes the request command fields it accepts by value, satisfying the denied Clippy ownership lint without changing the public call contract.
 - Cargo dependency resolution is committed, while generated `target/` artifacts are excluded from repository state.
+- Exact-head checkout assertion and repository-wide tracked-whitespace validation.

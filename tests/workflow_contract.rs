@@ -14,6 +14,13 @@ fn quality_checkout_is_bound_to_the_pull_request_head() {
 }
 
 #[test]
+fn tracked_files_are_checked_for_whitespace_regressions() {
+    assert!(QUALITY_WORKFLOW.contains(
+        "git diff --check \"$(git hash-object -t tree /dev/null)\" HEAD"
+    ));
+}
+
+#[test]
 fn production_coverage_requires_statement_regions() {
     assert!(QUALITY_WORKFLOW.contains("Path(\"target/coverage.json\")"));
     assert!(QUALITY_WORKFLOW.contains("summary.get(\"regions\")"));
