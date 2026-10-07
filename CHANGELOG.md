@@ -28,3 +28,4 @@
 - Publication admission now consumes the request command fields it accepts by value, satisfying the denied Clippy ownership lint without changing the public call contract.
 - Cargo dependency resolution is committed, while generated `target/` artifacts are excluded from repository state.
 - Exact-head checkout assertion and repository-wide tracked-whitespace validation.
+- ADR 0001 remains Proposed until ordinary protected integration.
